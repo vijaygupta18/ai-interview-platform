@@ -228,11 +228,29 @@ export default function DashboardPage() {
   const statusBadge = (status: string) => {
     switch (status) {
       case "waiting":
-        return <span className="badge-warning">Waiting</span>;
+        return (
+          <span className="badge-warning">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5" />
+            Waiting
+          </span>
+        );
       case "in_progress":
-        return <span className="badge-info animate-pulse">In Progress</span>;
+        return (
+          <span className="badge-info">
+            <span className="relative flex h-2 w-2 mr-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </span>
+            In Progress
+          </span>
+        );
       case "completed":
-        return <span className="badge-success">Completed</span>;
+        return (
+          <span className="badge-success">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5" />
+            Completed
+          </span>
+        );
       default:
         return <span className="badge-info">{status}</span>;
     }
@@ -400,8 +418,21 @@ export default function DashboardPage() {
           </div>
         ) : filtered.length === 0 && interviews.length === 0 ? (
           <div className="card p-16 text-center animate-scale-in">
-            <p className="text-lg font-medium text-gray-900">No interviews yet</p>
-            <p className="text-sm text-gray-500 mt-1 mb-6">Create your first one to get started</p>
+            {/* Empty state illustration */}
+            <svg className="w-32 h-32 mx-auto mb-6 text-gray-200" viewBox="0 0 120 120" fill="none">
+              <rect x="20" y="30" width="80" height="65" rx="8" stroke="currentColor" strokeWidth="2" />
+              <rect x="30" y="42" width="30" height="4" rx="2" fill="currentColor" opacity="0.5" />
+              <rect x="30" y="52" width="50" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <rect x="30" y="60" width="40" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <rect x="30" y="68" width="45" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <circle cx="82" cy="45" r="8" stroke="currentColor" strokeWidth="2" opacity="0.5" />
+              <path d="M79 45l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+              <rect x="30" y="78" width="24" height="8" rx="4" fill="#818cf8" opacity="0.3" />
+              <circle cx="90" cy="25" r="12" fill="#818cf8" opacity="0.1" />
+              <path d="M87 25l2 2 4-4" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+            </svg>
+            <p className="text-xl font-semibold text-gray-900 mb-2">No interviews yet</p>
+            <p className="text-gray-500 mb-8 max-w-sm mx-auto">Create your first AI-powered interview and share the link with your candidate to get started.</p>
             <Link href="/new" className="btn-primary inline-flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -530,9 +561,21 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-6 py-4">
                             {interview.scorecard ? (
-                              <span className={`text-sm font-semibold ${scoreColor(interview.scorecard.overall)}`}>
-                                {interview.scorecard.overall}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <div className="relative w-8 h-8">
+                                  <svg className="w-8 h-8 -rotate-90" viewBox="0 0 36 36">
+                                    <circle cx="18" cy="18" r="14" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                                    <circle cx="18" cy="18" r="14" fill="none"
+                                      stroke={interview.scorecard.overall >= 3.5 ? "#22c55e" : interview.scorecard.overall >= 2.5 ? "#f59e0b" : "#ef4444"}
+                                      strokeWidth="3" strokeLinecap="round"
+                                      strokeDasharray={`${(interview.scorecard.overall / 5) * 87.96} 87.96`}
+                                    />
+                                  </svg>
+                                  <span className={`absolute inset-0 flex items-center justify-center text-[10px] font-bold ${scoreColor(interview.scorecard.overall)}`}>
+                                    {interview.scorecard.overall}
+                                  </span>
+                                </div>
+                              </div>
                             ) : (
                               <span className="text-sm text-gray-400">-</span>
                             )}
@@ -644,19 +687,37 @@ export default function DashboardPage() {
                     >
                       Prev
                     </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`w-7 h-7 rounded-md text-xs font-medium transition-all ${
-                          currentPage === page
-                            ? "bg-indigo-600 text-white shadow-sm"
-                            : "text-gray-600 hover:bg-gray-200"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
+                    {(() => {
+                      const pages: (number | "ellipsis-start" | "ellipsis-end")[] = [];
+                      if (totalPages <= 7) {
+                        for (let i = 1; i <= totalPages; i++) pages.push(i);
+                      } else {
+                        pages.push(1);
+                        if (currentPage > 3) pages.push("ellipsis-start");
+                        const start = Math.max(2, currentPage - 1);
+                        const end = Math.min(totalPages - 1, currentPage + 1);
+                        for (let i = start; i <= end; i++) pages.push(i);
+                        if (currentPage < totalPages - 2) pages.push("ellipsis-end");
+                        pages.push(totalPages);
+                      }
+                      return pages.map((page) =>
+                        typeof page === "string" ? (
+                          <span key={page} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">...</span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`w-7 h-7 rounded-md text-xs font-medium transition-all ${
+                              currentPage === page
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      );
+                    })()}
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}

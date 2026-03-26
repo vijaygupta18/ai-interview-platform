@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addProctoringEvent } from "@/lib/store";
+import { validateInterviewExists } from "@/lib/auth-check";
 
 export async function POST(req: Request) {
   try {
@@ -7,6 +8,10 @@ export async function POST(req: Request) {
 
     if (!interviewId || !type || !severity || !message) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (!(await validateInterviewExists(interviewId))) {
+      return NextResponse.json({ error: "Invalid interview" }, { status: 403 });
     }
 
     await addProctoringEvent(interviewId, {

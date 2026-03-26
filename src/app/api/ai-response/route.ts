@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getInterview, addTranscriptEntry } from "@/lib/store";
 import { getAIResponse } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
+import { validateInterviewExists } from "@/lib/auth-check";
 
 export async function POST(req: Request) {
   try {
@@ -13,6 +14,10 @@ export async function POST(req: Request) {
 
     if (!interviewId) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
+    }
+
+    if (!(await validateInterviewExists(interviewId))) {
+      return NextResponse.json({ error: "Invalid interview" }, { status: 403 });
     }
 
     const interview = await getInterview(interviewId);

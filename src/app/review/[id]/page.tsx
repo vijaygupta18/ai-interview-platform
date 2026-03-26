@@ -150,22 +150,8 @@ export default function ReviewPage() {
         const json = await res.json();
 
         if (json.scorecard && !json.scorecard.scores) {
-          const sc = json.scorecard;
-          json.scorecard = {
-            scores: [
-              { dimension: "Technical Depth", score: sc.technicalDepth ?? sc.overall ?? 3 },
-              { dimension: "Communication", score: sc.communication ?? sc.overall ?? 3 },
-              { dimension: "Problem Solving", score: sc.problemSolving ?? sc.overall ?? 3 },
-              { dimension: "Domain Knowledge", score: sc.domainKnowledge ?? sc.overall ?? 3 },
-              { dimension: "Culture Fit", score: sc.cultureFit ?? sc.overall ?? 3 },
-            ],
-            overall: sc.overall ?? 3,
-            recommendation: sc.recommendation ?? "no_hire",
-            overallAssessment: sc.overallAssessment ?? sc.summary ?? "No assessment available.",
-            strengths: sc.strengths ?? [],
-            weaknesses: sc.weaknesses ?? [],
-            evidence: sc.evidence ?? [],
-          };
+          const { normalizeScorecard } = await import("@/lib/normalize-scorecard");
+          json.scorecard = normalizeScorecard(json.scorecard);
         }
 
         if (json.transcript) {

@@ -16,6 +16,10 @@ const transporter = isConfigured
 
 const fromAddress = process.env.SMTP_FROM || "AI Interview Platform <noreply@interview.ai>";
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function wrapHtml(body: string): string {
   return `<!DOCTYPE html>
 <html>
@@ -61,13 +65,13 @@ export async function sendInterviewInvite(
       Interview Invitation
     </h1>
     <p style="color:#a1a1aa;font-size:14px;text-align:center;margin:0 0 28px">
-      Hi ${candidateName || "there"}, you've been invited to an AI-powered interview.
+      Hi ${escapeHtml(candidateName || "there")}, you've been invited to an AI-powered interview.
     </p>
     <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:20px;margin-bottom:28px">
       <table style="width:100%;color:#a1a1aa;font-size:14px" cellpadding="0" cellspacing="0">
         <tr>
           <td style="padding:4px 0;color:#71717a">Role</td>
-          <td style="padding:4px 0;text-align:right;color:#e4e4e7;font-weight:500">${role}</td>
+          <td style="padding:4px 0;text-align:right;color:#e4e4e7;font-weight:500">${escapeHtml(role)}</td>
         </tr>
         <tr>
           <td style="padding:4px 0;color:#71717a">Duration</td>
@@ -76,7 +80,7 @@ export async function sendInterviewInvite(
       </table>
     </div>
     <div style="text-align:center">
-      <a href="${interviewUrl}" style="display:inline-block;background:#3b82f6;color:#fff;font-weight:600;font-size:14px;padding:12px 32px;border-radius:10px;text-decoration:none">
+      <a href="${escapeHtml(interviewUrl)}" style="display:inline-block;background:#3b82f6;color:#fff;font-weight:600;font-size:14px;padding:12px 32px;border-radius:10px;text-decoration:none">
         Start Interview
       </a>
     </div>
@@ -105,10 +109,10 @@ export async function sendInterviewComplete(
       Interview Completed
     </h1>
     <p style="color:#a1a1aa;font-size:14px;text-align:center;margin:0 0 28px">
-      Hi ${interviewerName || "there"}, the interview with <strong style="color:#e4e4e7">${candidateEmail}</strong> has been completed.
+      Hi ${escapeHtml(interviewerName || "there")}, the interview with <strong style="color:#e4e4e7">${escapeHtml(candidateEmail)}</strong> has been completed.
     </p>
     <div style="text-align:center">
-      <a href="${reviewUrl}" style="display:inline-block;background:#3b82f6;color:#fff;font-weight:600;font-size:14px;padding:12px 32px;border-radius:10px;text-decoration:none">
+      <a href="${escapeHtml(reviewUrl)}" style="display:inline-block;background:#3b82f6;color:#fff;font-weight:600;font-size:14px;padding:12px 32px;border-radius:10px;text-decoration:none">
         Review Scorecard
       </a>
     </div>

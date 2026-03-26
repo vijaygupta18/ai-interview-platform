@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { getInterview, updateInterview } from "@/lib/store";
 import { generateScorecard } from "@/lib/ai";
 import { startScoring, completeScoring, failScoring } from "@/lib/scoring-tracker";
+import { normalizeScorecard } from "@/lib/normalize-scorecard";
+import { validateAccess } from "@/lib/auth-check";
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const { authorized } = await validateAccess(req, id);
+  if (!authorized) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const interview = await getInterview(id);
   if (!interview) {
@@ -52,26 +59,7 @@ async function generateScorecardInBackground(id: string, interview: any) {
       else throw new Error("Could not parse scorecard JSON");
     }
 
-    const scorecard = {
-      scores: [
-        { dimension: "Technical Depth", score: parsed.technicalDepth ?? parsed.technical_depth ?? 3 },
-        { dimension: "Communication", score: parsed.communication ?? 3 },
-        { dimension: "Problem Solving", score: parsed.problemSolving ?? parsed.problem_solving ?? 3 },
-        { dimension: "Domain Knowledge", score: parsed.domainKnowledge ?? parsed.domain_knowledge ?? 3 },
-        { dimension: "Culture Fit", score: parsed.cultureFit ?? parsed.culture_fit ?? 3 },
-      ],
-      overall: parsed.overall ?? 3,
-      recommendation: parsed.recommendation ?? "no_hire",
-      overallAssessment: parsed.summary ?? parsed.overallAssessment ?? "No assessment available.",
-      strengths: parsed.strengths ?? [],
-      weaknesses: parsed.weaknesses ?? [],
-      evidence: (parsed.evidence ?? []).map((e: any) => ({
-        dimension: e.dimension ?? "",
-        quote: e.quote ?? "",
-        assessment: e.assessment ?? "",
-      })),
-      proctoringNotes: parsed.proctoringNotes ?? "No issues detected.",
-    };
+    const scorecard = normalizeScorecard(parsed);
 
     await updateInterview(id, { scorecard });
     completeScoring(id);

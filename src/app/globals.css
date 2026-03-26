@@ -19,7 +19,7 @@ body {
     @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 hover:translate-x-0.5;
   }
   .sidebar-link-active {
-    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-indigo-600 bg-indigo-50 border-l-4 border-indigo-600 -ml-0.5;
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-indigo-600 bg-gradient-to-r from-indigo-50 to-indigo-50/50 border-l-4 border-indigo-600 -ml-0.5 shadow-sm;
   }
   .btn-primary {
     @apply px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-all duration-200 shadow-sm active:scale-[0.98];
@@ -124,11 +124,40 @@ body {
 }
 .animate-grow-width { animation: growWidth 0.8s ease-out forwards; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #F3F4F6; }
-::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+/* Focus ring */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px rgba(99, 102, 241, 0.3);
+  border-radius: 0.375rem;
+}
+
+/* Selection color */
+::selection {
+  background-color: #e0e7ff;
+  color: #312e81;
+}
+
+/* Smooth scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Table styles */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+table tbody tr:nth-child(odd) {
+  background-color: rgba(249, 250, 251, 0.5);
+}
+table tbody tr:hover {
+  background-color: rgba(238, 242, 255, 0.5) !important;
+}
 
 /* Proctoring ban countdown bar */
 @keyframes shrinkBar {

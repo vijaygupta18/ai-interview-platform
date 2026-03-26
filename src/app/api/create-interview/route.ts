@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { saveInterview, Interview } from "@/lib/store";
 import { sendInterviewInvite } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
+import { pool } from "@/lib/db";
 import mammoth from "mammoth";
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
@@ -64,6 +65,16 @@ export async function POST(req: Request) {
     let resumeFileName = "";
 
     if (resumeFile && resumeFile.size > 0) {
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (resumeFile.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: "Resume file too large. Maximum size is 10MB." }, { status: 400 });
+      }
+      const ALLOWED_TYPES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
+      const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt"];
+      const ext = resumeFile.name.toLowerCase().split(".").pop();
+      if (!ALLOWED_TYPES.includes(resumeFile.type) && !ALLOWED_EXTENSIONS.includes(`.${ext}`)) {
+        return NextResponse.json({ error: "Invalid file type. Supported: PDF, DOCX, TXT." }, { status: 400 });
+      }
       const arrayBuffer = await resumeFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       resumeFileName = resumeFile.name;
@@ -77,7 +88,7 @@ export async function POST(req: Request) {
         resumeText = buffer.toString("utf-8");
       }
 
-      console.log(`Resume parsed: ${resumeFileName}, text length: ${resumeText.length}, first 200 chars: ${resumeText.substring(0, 200)}`);
+      console.log(`Resume parsed: ${resumeFileName}, text length: ${resumeText.length}`);
     }
 
     if (!resumeText) {
@@ -88,13 +99,10 @@ export async function POST(req: Request) {
     let questionBankQuestions: string[] = [];
     if (questionBankId) {
       try {
-        const { Pool } = await import("pg");
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform" });
         const { rows } = await pool.query("SELECT questions FROM question_banks WHERE id = $1", [questionBankId]);
         if (rows.length > 0 && rows[0].questions) {
           questionBankQuestions = Array.isArray(rows[0].questions) ? rows[0].questions : JSON.parse(rows[0].questions);
         }
-        await pool.end();
       } catch (err) {
         console.error("Failed to load question bank:", err);
       }

@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
-});
+import { pool } from "@/lib/db";
 
 const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -15,6 +11,10 @@ export async function POST(req: Request) {
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "Email, password, and name are required" }, { status: 400 });
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
     const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);

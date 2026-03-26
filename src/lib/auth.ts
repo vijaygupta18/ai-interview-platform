@@ -1,11 +1,7 @@
 import CredentialsProvider from "next-auth/providers/credentials";
-import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import type { NextAuthOptions } from "next-auth";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
-});
+import { pool } from "./db";
 
 export const authOptions: NextAuthOptions = {
   providers: [

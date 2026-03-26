@@ -1,8 +1,4 @@
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
-});
+import { pool } from "./db";
 
 export interface Interview {
   id: string;
@@ -128,6 +124,10 @@ export async function updateInterview(id: string, updates: Partial<Interview>): 
     startedAt: "started_at",
     endedAt: "ended_at",
     scorecard: "scorecard",
+    browserFingerprint: "browser_fingerprint",
+    scoringStatus: "scoring_status",
+    scoringStartedAt: "scoring_started_at",
+    recordingUrl: "recording_url",
   };
 
   for (const [key, col] of Object.entries(columnMap)) {
@@ -173,37 +173,68 @@ async function getProctoringEvents(interviewId: string): Promise<ProctoringEvent
 }
 
 export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, "resume">[]> {
-  const query = orgId
+  const interviewQuery = orgId
     ? "SELECT id, resume_file_name, candidate_email, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews WHERE org_id = $1 ORDER BY created_at DESC"
     : "SELECT id, resume_file_name, candidate_email, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews ORDER BY created_at DESC";
-  const { rows } = await pool.query(query, orgId ? [orgId] : []);
-  const results = [];
-  for (const row of rows) {
-    const transcript = await getTranscript(row.id);
-    const proctoring = await getProctoringEvents(row.id);
-    results.push({
-      id: row.id,
-      resume: "",
-      resumeFileName: row.resume_file_name,
-      candidateEmail: row.candidate_email || "",
-      token: "",
-      browserFingerprint: null,
-      role: row.role,
-      level: row.level,
-      focusAreas: row.focus_areas,
-      duration: row.duration,
-      roundType: row.round_type || "General",
-      language: row.language || "",
-      status: row.status,
-      transcript,
-      proctoring,
-      scorecard: row.scorecard,
-      createdAt: row.created_at?.toISOString(),
-      startedAt: row.started_at?.toISOString() || null,
-      endedAt: row.ended_at?.toISOString() || null,
-    });
+  const { rows } = await pool.query(interviewQuery, orgId ? [orgId] : []);
+
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+
+  // Batch fetch all transcripts and proctoring events in two queries instead of N+1
+  const [transcriptResult, proctoringResult] = await Promise.all([
+    pool.query(
+      "SELECT interview_id, role, text, created_at FROM transcript_entries WHERE interview_id = ANY($1) ORDER BY id ASC",
+      [ids]
+    ),
+    pool.query(
+      "SELECT interview_id, type, severity, message, photo, created_at FROM proctoring_events WHERE interview_id = ANY($1) ORDER BY id ASC",
+      [ids]
+    ),
+  ]);
+
+  const transcriptMap = new Map<string, TranscriptEntry[]>();
+  for (const r of transcriptResult.rows) {
+    const entries = transcriptMap.get(r.interview_id) || [];
+    entries.push({ role: r.role as "ai" | "candidate", text: r.text, timestamp: r.created_at?.toISOString() });
+    transcriptMap.set(r.interview_id, entries);
   }
-  return results;
+
+  const proctoringMap = new Map<string, ProctoringEvent[]>();
+  for (const r of proctoringResult.rows) {
+    const events = proctoringMap.get(r.interview_id) || [];
+    events.push({
+      type: r.type,
+      severity: r.severity,
+      message: r.message,
+      timestamp: r.created_at?.toISOString(),
+      ...(r.photo ? { photo: r.photo } : {}),
+    });
+    proctoringMap.set(r.interview_id, events);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    resume: "",
+    resumeFileName: row.resume_file_name,
+    candidateEmail: row.candidate_email || "",
+    token: "",
+    browserFingerprint: null,
+    role: row.role,
+    level: row.level,
+    focusAreas: row.focus_areas,
+    duration: row.duration,
+    roundType: row.round_type || "General",
+    language: row.language || "",
+    status: row.status,
+    transcript: transcriptMap.get(row.id) || [],
+    proctoring: proctoringMap.get(row.id) || [],
+    scorecard: row.scorecard,
+    createdAt: row.created_at?.toISOString(),
+    startedAt: row.started_at?.toISOString() || null,
+    endedAt: row.ended_at?.toISOString() || null,
+  }));
 }
 
 export async function getInterviewByToken(token: string): Promise<Interview | null> {

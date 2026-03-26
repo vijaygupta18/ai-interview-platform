@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { normalizeScorecard } from "@/lib/normalize-scorecard";
 
 const dimensionLabels: Record<string, string> = {
   technicalDepth: "Technical Depth",
@@ -89,18 +90,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
       .then((r) => r.json())
       .then((data) => {
         if (data.scorecard && !data.scorecard.scores && data.scorecard.technicalDepth !== undefined) {
-          const sc = data.scorecard;
-          data.scorecard = {
-            ...sc,
-            scores: [
-              { dimension: "Technical Depth", score: sc.technicalDepth ?? 3 },
-              { dimension: "Communication", score: sc.communication ?? 3 },
-              { dimension: "Problem Solving", score: sc.problemSolving ?? 3 },
-              { dimension: "Domain Knowledge", score: sc.domainKnowledge ?? 3 },
-              { dimension: "Culture Fit", score: sc.cultureFit ?? 3 },
-            ],
-            overallAssessment: sc.overallAssessment ?? sc.summary ?? "",
-          };
+          data.scorecard = normalizeScorecard(data.scorecard);
         }
         setInterview(data);
       })

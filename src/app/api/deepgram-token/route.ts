@@ -28,12 +28,10 @@ export async function GET() {
       return NextResponse.json({ key: data.key });
     }
 
-    // If temp key creation fails (free tier may not support it),
-    // fall back to the main key but log a warning
-    console.warn("Could not create temporary Deepgram key, using main key. Consider upgrading for better security.");
-    return NextResponse.json({ key: apiKey });
+    console.warn("Could not create temporary Deepgram key.");
+    return NextResponse.json({ error: "Could not create secure token. Try again." }, { status: 503 });
   } catch (err) {
     console.warn("Temporary key creation failed:", err);
-    return NextResponse.json({ key: apiKey });
+    return NextResponse.json({ error: "Could not create secure token. Try again." }, { status: 503 });
   }
 }

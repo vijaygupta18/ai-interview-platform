@@ -1,6 +1,6 @@
 import type { Interview, TranscriptEntry } from "./store";
 
-function stripThinking(text: string): string {
+export function stripThinking(text: string): string {
   // This model (kimi/Open-Thinking) dumps reasoning into content.
   // Pattern: reasoning block (multi-paragraph), then the actual spoken response.
   // The actual response is usually the LAST paragraph that sounds like speech.
@@ -215,14 +215,14 @@ async function callJuspayAI(
   maxTokens = 300,
   temperature = 0.7
 ): Promise<string> {
-  const res = await fetch(`${process.env.JUSPAY_AI_BASE_URL}/v1/chat/completions`, {
+  const res = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.JUSPAY_AI_API_KEY}`,
+      Authorization: `Bearer ${process.env.AI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.JUSPAY_AI_MODEL || "kimi-latest",
+      model: process.env.AI_MODEL || "kimi-latest",
       messages,
       max_tokens: maxTokens,
       temperature,
@@ -232,7 +232,7 @@ async function callJuspayAI(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Juspay AI error: ${res.status} ${err}`);
+    throw new Error(`AI API error: ${res.status} ${err}`);
   }
 
   const data = await res.json();
@@ -250,7 +250,11 @@ export async function getAIResponse(
     { role: "assistant", content: "Got it, I have the resume. Ready to begin the interview." },
   ];
 
-  for (const entry of transcript) {
+  const trimmedTranscript = transcript.length > 40
+    ? [...transcript.slice(0, 5), ...transcript.slice(-35)]
+    : transcript;
+
+  for (const entry of trimmedTranscript) {
     messages.push({
       role: entry.role === "ai" ? "assistant" : "user",
       content: entry.text,

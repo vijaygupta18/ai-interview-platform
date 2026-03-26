@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
+import { validateEnv } from "@/lib/env";
 import "./globals.css";
+
+validateEnv();
 
 export const metadata: Metadata = {
   title: "AI Interview Platform",

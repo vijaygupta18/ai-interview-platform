@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
+import { validateInterviewExists } from "@/lib/auth-check";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +14,14 @@ export async function POST(req: Request) {
 
     if (!audio || !interviewId) {
       return NextResponse.json({ error: "Missing audio or interviewId" }, { status: 400 });
+    }
+
+    if (!UUID_REGEX.test(interviewId)) {
+      return NextResponse.json({ error: "Invalid interview ID" }, { status: 400 });
+    }
+
+    if (!(await validateInterviewExists(interviewId))) {
+      return NextResponse.json({ error: "Invalid interview" }, { status: 403 });
     }
 
     const dir = join(process.cwd(), "data", "recordings");

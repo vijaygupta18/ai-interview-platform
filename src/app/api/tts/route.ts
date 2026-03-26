@@ -1,34 +1,24 @@
 import { NextResponse } from "next/server";
-
-function stripThinking(text: string): string {
-  let cleaned = text;
-  cleaned = cleaned.replace(/<(?:think|thinking|reasoning|thought|internal|plan|meta|scratch|scratchpad)[\s\S]*?<\/(?:think|thinking|reasoning|thought|internal|plan|meta|scratch|scratchpad)>/gi, "");
-  cleaned = cleaned.replace(/<(?:think|thinking|reasoning|thought)>[\s\S]*/gi, "");
-  cleaned = cleaned.replace(/^[\s\S]*?<\/(?:think|thinking|reasoning|thought)>\s*/i, "");
-  cleaned = cleaned.replace(/<\/(?:think|thinking|reasoning|thought)>/gi, "");
-  cleaned = cleaned.replace(/^(?:The user|Plan:|Key requirements:|Since I|Let me|I need to|I should|I'll|My approach|Step \d|Thinking:|Internal:|Note to self).*$/gm, "");
-  cleaned = cleaned.replace(/^#+\s*(?:Plan|Approach|Strategy|Analysis|Thinking|Notes).*$/gm, "");
-  cleaned = cleaned.replace(/^\d+\.\s*(?:First|Then|Next|Finally|After that).*$/gm, "");
-  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
-  return cleaned || text.trim();
-}
+import { stripThinking } from "@/lib/ai";
 
 // Edge TTS via CLI — free, Indian female voice
 async function edgeTTS(text: string): Promise<Buffer | null> {
   try {
-    const { execSync } = await import("child_process");
+    const { execFileSync } = await import("child_process");
     const fs = await import("fs");
     const path = await import("path");
 
     const tmpFile = path.join(process.cwd(), `_tts_${Date.now()}.mp3`);
-    const safeText = text.replace(/'/g, "'\\''");
     const voice = process.env.EDGE_TTS_VOICE || "en-IN-NeerjaNeural";
     const rate = process.env.EDGE_TTS_RATE || "+10%";
 
-    execSync(
-      `edge-tts --voice "${voice}" --rate="${rate}" --pitch="-2Hz" --text '${safeText}' --write-media "${tmpFile}"`,
-      { timeout: 15000, stdio: "pipe" }
-    );
+    execFileSync("edge-tts", [
+      "--voice", voice,
+      "--rate", rate,
+      "--pitch", "-2Hz",
+      "--text", text,
+      "--write-media", tmpFile,
+    ], { timeout: 15000, stdio: "pipe" });
 
     const audioBuffer = fs.readFileSync(tmpFile);
     fs.unlinkSync(tmpFile);

@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
-});
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { pool } from "@/lib/db";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const { rows } = await pool.query("SELECT * FROM question_banks WHERE id = $1", [params.id]);
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const orgId = (session.user as any).orgId;
+
+    const { rows } = await pool.query("SELECT * FROM question_banks WHERE id = $1 AND org_id = $2", [params.id, orgId]);
     if (rows.length === 0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -20,12 +24,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const orgId = (session.user as any).orgId;
+
     const { name, role, level, roundType, questions } = await req.json();
     const { rows } = await pool.query(
       `UPDATE question_banks SET name = $1, role = $2, level = $3, round_type = $4, questions = $5
-       WHERE id = $6
+       WHERE id = $6 AND org_id = $7
        RETURNING id, org_id, name, role, level, round_type, questions`,
-      [name, role, level, roundType, JSON.stringify(questions || []), params.id]
+      [name, role, level, roundType, JSON.stringify(questions || []), params.id, orgId]
     );
     if (rows.length === 0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -39,7 +49,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const { rowCount } = await pool.query("DELETE FROM question_banks WHERE id = $1", [params.id]);
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const orgId = (session.user as any).orgId;
+
+    const { rowCount } = await pool.query("DELETE FROM question_banks WHERE id = $1 AND org_id = $2", [params.id, orgId]);
     if (rowCount === 0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

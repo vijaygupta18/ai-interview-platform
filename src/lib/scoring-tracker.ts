@@ -1,8 +1,4 @@
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
-});
+import { pool } from "./db";
 
 export async function startScoring(interviewId: string): Promise<boolean> {
   // Atomic check-and-set: only succeeds if not already generating

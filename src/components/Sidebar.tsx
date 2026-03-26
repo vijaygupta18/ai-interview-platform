@@ -71,13 +71,16 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={`px-6 py-5 border-b border-gray-200 transition-shadow duration-200 ${scrolled ? "shadow-sm" : ""}`}>
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <Link href="/" className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25z" />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-gray-900">InterviewAI</span>
+          <div>
+            <span className="text-lg font-bold text-gray-900">InterviewAI</span>
+            <p className="text-[10px] text-gray-400 -mt-0.5 tracking-wide uppercase">AI-Powered Hiring</p>
+          </div>
         </Link>
       </div>
 
@@ -96,10 +99,23 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {/* Help link */}
+      <div className="px-3 pb-2">
+        <a
+          href="mailto:support@interviewai.com"
+          className="sidebar-link text-gray-400 hover:text-gray-600"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+          </svg>
+          Help & Support
+        </a>
+      </div>
+
       {/* Divider + User */}
       <div className="border-t border-gray-200 px-3 py-4">
         <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm font-semibold">
+          <div className="w-9 h-9 bg-gradient-to-br from-indigo-400 to-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-semibold shadow-sm">
             {userInitial}
           </div>
           <div className="flex-1 min-w-0">

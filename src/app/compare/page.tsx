@@ -36,11 +36,11 @@ function RadarChart({ candidates }: { candidates: { label: string; scores: { dim
 
   const getPoint = (index: number, value: number) => {
     const angle = angleStep * index - Math.PI / 2;
-    const r = (value / 10) * radius;
+    const r = (value / 5) * radius;
     return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
   };
 
-  const gridLevels = [2, 4, 6, 8, 10];
+  const gridLevels = [1, 2, 3, 4, 5];
 
   const polygonRefs = useRef<(SVGPolygonElement | null)[]>([]);
 
@@ -74,7 +74,7 @@ function RadarChart({ candidates }: { candidates: { label: string; scores: { dim
         />
       ))}
       {dimensions.map((_, i) => {
-        const p = getPoint(i, 10);
+        const p = getPoint(i, 5);
         return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#e5e7eb" strokeWidth="1" />;
       })}
       {candidates.map((cand, ci) => (
@@ -91,7 +91,7 @@ function RadarChart({ candidates }: { candidates: { label: string; scores: { dim
         />
       ))}
       {dimensions.map((dim, i) => {
-        const p = getPoint(i, 12);
+        const p = getPoint(i, 6);
         return (
           <text
             key={i}
@@ -192,7 +192,7 @@ export default function ComparePage() {
                     )}
                     {interview.candidateEmail || interview.id.slice(0, 8)}
                     <span className="text-gray-400 ml-2">
-                      {interview.scorecard?.overall ?? "?"}/10
+                      {interview.scorecard?.overall ?? "?"}/5
                     </span>
                   </button>
                 );
@@ -250,7 +250,7 @@ export default function ComparePage() {
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-2xl font-bold text-gray-900">{sc.overall}</span>
-                        <span className="text-sm text-gray-500">/10</span>
+                        <span className="text-sm text-gray-500">/5</span>
                         {isBest && (
                           <span className="ml-auto badge-success !text-[10px]">TOP</span>
                         )}
@@ -279,7 +279,7 @@ export default function ComparePage() {
                               <span className={`font-medium ${
                                 isBestDim ? "text-green-600" : isWorstDim ? "text-red-600" : "text-gray-700"
                               }`}>
-                                {s.score}/10
+                                {s.score}/5
                               </span>
                             </div>
                             <div className="h-1.5 rounded-full bg-gray-100">
@@ -287,7 +287,7 @@ export default function ComparePage() {
                                 className={`h-full rounded-full transition-all duration-700 ease-out ${
                                   isBestDim ? "bg-green-500" : isWorstDim ? "bg-red-500" : "bg-indigo-500"
                                 }`}
-                                style={{ width: `${(s.score / 10) * 100}%` }}
+                                style={{ width: `${(s.score / 5) * 100}%` }}
                               />
                             </div>
                           </div>
@@ -331,7 +331,7 @@ export default function ComparePage() {
                 </div>
                 <p className="text-sm text-gray-600">
                   Based on overall scores, <span className="text-green-700 font-semibold">{bestCandidate.candidateEmail || bestCandidate.id.slice(0, 8)}</span> is
-                  the strongest candidate with an overall score of <span className="text-gray-900 font-semibold">{bestCandidate.scorecard?.overall}/10</span>.
+                  the strongest candidate with an overall score of <span className="text-gray-900 font-semibold">{bestCandidate.scorecard?.overall}/5</span>.
                   {bestCandidate.scorecard?.recommendation && (
                     <> Recommendation: <span className="text-green-700">{bestCandidate.scorecard.recommendation}</span>.</>
                   )}
@@ -344,7 +344,7 @@ export default function ComparePage() {
                         <div key={interview.id} className="flex items-center gap-2 text-xs text-gray-500">
                           <span className="font-semibold text-gray-700">#{i + 1}</span>
                           <span>{interview.candidateEmail || interview.id.slice(0, 8)}</span>
-                          <span className="text-gray-400">({interview.scorecard?.overall}/10)</span>
+                          <span className="text-gray-400">({interview.scorecard?.overall}/5)</span>
                         </div>
                       ))}
                   </div>
