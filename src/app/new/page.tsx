@@ -4,18 +4,25 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
-const LEVELS = ["Junior", "Mid", "Senior", "Staff", "Principal"];
-const DURATIONS = [15, 30, 45, 60];
-const ROUND_TYPES = ["General", "Technical", "Behavioral", "System Design", "Coding"];
-const CODING_LANGUAGES = ["JavaScript", "Python", "Java", "C++", "Go"];
+const LEVELS = ["Intern", "Junior", "Mid", "Senior", "Staff", "Principal", "Manager", "Director"];
+const DURATIONS = [10, 15, 20, 30, 45, 60];
+const ROUND_TYPES = ["General", "Technical", "Behavioral", "System Design", "Coding", "HR", "Culture Fit", "Managerial", "Case Study"];
+const CODING_LANGUAGES = ["JavaScript", "TypeScript", "Python", "Java", "C++", "Go", "Rust", "Haskell", "Kotlin", "Swift", "Ruby", "C#", "Scala", "SQL", "PHP"];
 const FOCUS_AREAS = [
-  "Technical",
+  "Technical Skills",
   "Behavioral",
   "System Design",
   "Problem Solving",
   "Leadership",
   "Communication",
   "Domain Knowledge",
+  "Customer Handling",
+  "Process & Operations",
+  "People Management",
+  "Analytical Thinking",
+  "Culture Fit",
+  "Stakeholder Management",
+  "Project Management",
 ];
 
 interface QuestionBank {

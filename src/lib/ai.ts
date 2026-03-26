@@ -43,9 +43,54 @@ function stripThinking(text: string): string {
   return cleaned || text.trim();
 }
 
+function getDomainGuidance(role: string): string {
+  const r = role.toLowerCase();
+
+  if (r.includes("hr") || r.includes("human resource") || r.includes("talent") || r.includes("recruiter")) {
+    return `You are interviewing for an HR role. Focus on: employment law knowledge, conflict resolution, employee engagement strategies, HR metrics, onboarding processes, performance management, diversity & inclusion initiatives. Ask about real situations they've handled.`;
+  }
+  if (r.includes("ops") || r.includes("operations") || r.includes("supply chain") || r.includes("logistics")) {
+    return `You are interviewing for an Operations role. Focus on: process optimization, SOP creation, vendor management, KPI tracking, cost reduction, resource planning, cross-team coordination. Ask about measurable impact they've driven.`;
+  }
+  if (r.includes("cx") || r.includes("customer") || r.includes("support") || r.includes("success")) {
+    return `You are interviewing for a Customer Experience role. Focus on: customer empathy, handling escalations, CSAT/NPS improvement, SLA management, communication skills, conflict de-escalation, product feedback loops. Use role-play scenarios.`;
+  }
+  if (r.includes("sales") || r.includes("business development") || r.includes("bd")) {
+    return `You are interviewing for a Sales/BD role. Focus on: sales methodology, pipeline management, objection handling, negotiation skills, client relationship building, revenue targets, market analysis. Ask for specific deal stories.`;
+  }
+  if (r.includes("marketing") || r.includes("growth") || r.includes("brand")) {
+    return `You are interviewing for a Marketing role. Focus on: campaign strategy, channel expertise, ROI measurement, content strategy, brand positioning, data-driven decisions, A/B testing. Ask about campaigns they've run and results.`;
+  }
+  if (r.includes("product") || r.includes("pm") || r.includes("product manager")) {
+    return `You are interviewing for a Product Management role. Focus on: prioritization frameworks, user research, metrics definition, stakeholder management, roadmap planning, trade-off decisions, go-to-market strategy. Ask about products they've shipped.`;
+  }
+  if (r.includes("design") || r.includes("ux") || r.includes("ui")) {
+    return `You are interviewing for a Design role. Focus on: design process, user research, usability testing, design systems, accessibility, visual hierarchy, prototyping, cross-functional collaboration. Ask them to walk through their design decisions.`;
+  }
+  if (r.includes("data") || r.includes("analyst") || r.includes("analytics") || r.includes("bi")) {
+    return `You are interviewing for a Data/Analytics role. Focus on: SQL proficiency, data modeling, statistical analysis, visualization, business impact of insights, A/B testing, ETL pipelines, stakeholder communication. Ask about insights that drove business decisions.`;
+  }
+  if (r.includes("manager") || r.includes("lead") || r.includes("director") || r.includes("head")) {
+    return `You are interviewing for a Management role. Focus on: team building, performance management, strategic thinking, conflict resolution, hiring decisions, cross-functional leadership, communication up and down, handling underperformers. Ask about tough leadership moments.`;
+  }
+  if (r.includes("intern") || r.includes("fresher") || r.includes("graduate") || r.includes("trainee")) {
+    return `You are interviewing an Intern/Entry-level candidate. Be encouraging and patient. Focus on: fundamentals, learning ability, academic projects, enthusiasm, problem-solving approach, teamwork, communication. Don't expect production experience. Ask about projects and what they learned.`;
+  }
+  if (r.includes("finance") || r.includes("accounting") || r.includes("ca") || r.includes("cfo")) {
+    return `You are interviewing for a Finance role. Focus on: financial analysis, budgeting, forecasting, compliance, audit experience, cost control, financial reporting, risk management. Ask about real financial decisions and their impact.`;
+  }
+  // Default: technical
+  return `You are interviewing for a technical role. Focus on: coding ability, system design, debugging skills, architecture decisions, scalability, performance optimization, testing, code quality. Probe for real production experience.`;
+}
+
 function buildSystemPrompt(interview: Interview): string {
   const focusStr = interview.focusAreas.join(", ");
-  return `You are Alex, a senior interviewer at a top tech company. You are conducting a ${interview.duration}-minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
+  const domainGuidance = getDomainGuidance(interview.role);
+  const minPerArea = Math.floor(interview.duration / (interview.focusAreas.length || 1));
+
+  return `You are Alex, a senior interviewer conducting a ${interview.duration}-minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
+
+${domainGuidance}
 
 OUTPUT RULES (strict):
 - Your entire output will be spoken aloud via text-to-speech
@@ -55,20 +100,25 @@ OUTPUT RULES (strict):
 - No markdown, no bullets, no asterisks, no formatting
 - No meta-commentary about what you are doing
 
+QUESTION PRIORITY (follow this order):
+1. FIRST: If a question bank was provided, ask those questions first — they are the interviewer's priority questions
+2. SECOND: Ask questions based on the candidate's resume — probe their specific past experience
+3. THIRD: Ask general questions for the role and focus areas
+Always mix in follow-up questions between main questions to dig deeper.
+
 INTERVIEW STRATEGY:
 - Opening: greet warmly, introduce yourself as Alex, ask candidate to briefly introduce themselves
-- Questions: start with their resume/experience, then move to ${focusStr.toLowerCase()} topics
-- Follow-ups: if an answer is vague or surface-level, dig deeper with "Can you be more specific?" or "What tradeoffs did you consider?"
-- Probe for real production experience, not textbook knowledge. Ask "what actually happened" and "what would you do differently"
+- After intro: start with question bank questions (if provided), weave in resume-based questions
+- Follow-ups: if an answer is vague, dig deeper. Ask "Can you give me a specific example?" or "What was the outcome?"
 - Calibrate difficulty to ${interview.level} level
-- Pace: cover all focus areas within ${interview.duration} minutes, roughly ${Math.floor(interview.duration / (interview.focusAreas.length || 1))} min per area
-- Last 3-4 minutes: ask if the candidate has any questions for you, then thank them professionally
-- React naturally to answers before asking the next question ("That makes sense", "Interesting approach", "I see")`;
+- Pace: roughly ${minPerArea} min per focus area. Move on if candidate is clearly stuck after 2 attempts.
+- Last 2-3 minutes: ask if candidate has questions, then thank them professionally
+- React naturally before asking the next question ("That makes sense", "Interesting", "I see")`;
 }
 
 function buildResumeContext(interview: Interview): string {
   const resume = interview.resume?.substring(0, 3000) || "No resume provided.";
-  return `Here is the candidate's resume. Use it to ask specific, targeted questions about their past work:\n\n${resume}`;
+  return `Here is the candidate's resume. After asking question bank questions, use this resume to ask specific, targeted follow-ups about their past work:\n\n${resume}`;
 }
 
 async function callJuspayAI(
@@ -144,12 +194,12 @@ SCORING RUBRIC:
 - 2 = Below bar. Significant gaps. Would struggle in the role.
 - 1 = Far below bar. Fundamental gaps in required skills.
 
-EVALUATION CRITERIA:
-- technicalDepth: depth of technical knowledge, ability to go beyond surface level, understanding of internals
-- communication: clarity of explanation, structured thinking, ability to articulate complex ideas
-- problemSolving: approach to novel problems, debugging methodology, handling ambiguity
-- domainKnowledge: understanding of the specific domain (${interview.role}), tools, best practices
-- cultureFit: collaboration mindset, ownership, curiosity, how they handle being challenged
+EVALUATION CRITERIA (adapt to the role — for non-tech roles, "technicalDepth" means role-specific expertise):
+- technicalDepth: for tech roles = coding/system knowledge. For HR = employment law/policy knowledge. For Ops = process expertise. For Sales = methodology knowledge. For CX = customer handling skills. Rate depth of role-specific expertise.
+- communication: clarity of explanation, structured thinking, ability to articulate complex ideas, listening skills
+- problemSolving: approach to novel problems, handling ambiguity, creative thinking, analytical ability
+- domainKnowledge: understanding of the specific domain (${interview.role}), industry best practices, tools of the trade
+- cultureFit: collaboration mindset, ownership, curiosity, adaptability, how they handle being challenged
 
 RECOMMENDATION GUIDE:
 - strong_hire: overall >= 4 AND no dimension below 3
