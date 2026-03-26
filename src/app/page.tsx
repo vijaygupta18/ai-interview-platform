@@ -167,7 +167,7 @@ export default function DashboardPage() {
 
     const statusOrder: Record<string, number> = { in_progress: 0, waiting: 1, completed: 2 };
 
-    result.sort((a, b) => {
+    result = [...result].sort((a, b) => {
       let cmp = 0;
       if (sortField === "date") {
         cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
