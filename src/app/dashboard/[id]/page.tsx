@@ -47,14 +47,16 @@ function ScoreBar({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex items-center gap-3">
       <span className="text-sm text-gray-600 w-36 shrink-0">{label}</span>
-      <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+      <span className="text-[10px] text-gray-400 shrink-0">0</span>
+      <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
         <div
           ref={barRef}
           className={`h-full rounded-full ${color} transition-all duration-700 ease-out`}
           style={{ width: "0%" }}
         />
       </div>
-      <span className="text-sm font-semibold text-gray-900 w-8 text-right">{value}</span>
+      <span className="text-[10px] text-gray-400 shrink-0">5</span>
+      <span className="text-sm font-bold text-gray-900 w-8 text-right">{value}</span>
     </div>
   );
 }
@@ -184,19 +186,37 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
         {/* Header Card */}
         <div className="card p-6 mb-6 animate-fade-in-up">
           <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {interview.candidateEmail || interview.resumeFileName}
-              </h1>
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                <span className="badge-info">{interview.role}</span>
-                <span className="badge-info">{interview.level}</span>
-                {statusBadge(interview.status)}
-                <span className="text-sm text-gray-500">{interview.duration}min</span>
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-sm shrink-0">
+                {(interview.candidateEmail || interview.resumeFileName || "?").charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">
+                  {interview.candidateEmail || interview.resumeFileName}
+                </h1>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="badge-info">{interview.role}</span>
+                  <span className="badge-info">{interview.level}</span>
+                  {statusBadge(interview.status)}
+                  <span className="text-sm text-gray-500">{interview.duration}min</span>
+                </div>
               </div>
             </div>
             {interview.scorecard && (
-              <div className="text-center">
+              <div className="text-center flex flex-col items-end gap-2">
+                <div className="relative w-14 h-14">
+                  <svg className="w-14 h-14 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="14" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
+                    <circle cx="18" cy="18" r="14" fill="none"
+                      stroke={interview.scorecard.overall >= 3.5 ? "#22c55e" : interview.scorecard.overall >= 2.5 ? "#f59e0b" : "#ef4444"}
+                      strokeWidth="2.5" strokeLinecap="round"
+                      strokeDasharray={`${(interview.scorecard.overall / 5) * 87.96} 87.96`}
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-900">
+                    {interview.scorecard.overall}
+                  </span>
+                </div>
                 <span className={recommendationBadge[interview.scorecard.recommendation] || "badge-info"}>
                   {formatRecommendation(interview.scorecard.recommendation)}
                 </span>
@@ -494,34 +514,38 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
                   <p className="text-sm text-green-600">No issues detected</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {interview.proctoring.map((event: any, i: number) => (
-                    <div
-                      key={i}
-                      className={`rounded-lg p-3 border ${
-                        event.severity === "flag"
-                          ? "bg-red-50 border-red-100"
-                          : "bg-amber-50 border-amber-100"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${event.severity === "flag" ? "bg-red-500" : "bg-amber-500"}`} />
-                          <span className={`text-xs font-medium uppercase ${event.severity === "flag" ? "text-red-700" : "text-amber-700"}`}>
-                            {event.type.replace(/_/g, " ")}
-                          </span>
+                <div className="relative max-h-80 overflow-y-auto pl-4">
+                  {/* Vertical timeline line */}
+                  <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gray-200" />
+                  <div className="space-y-3">
+                    {interview.proctoring.map((event: any, i: number) => (
+                      <div key={i} className="relative flex gap-3">
+                        {/* Timeline dot */}
+                        <div className={`absolute -left-4 top-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                          event.severity === "flag" ? "bg-red-500" : "bg-amber-500"
+                        }`} />
+                        <div className={`flex-1 rounded-lg p-3 border ${
+                          event.severity === "flag"
+                            ? "bg-red-50 border-red-100"
+                            : "bg-amber-50 border-amber-100"
+                        }`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-xs font-medium uppercase ${event.severity === "flag" ? "text-red-700" : "text-amber-700"}`}>
+                              {event.type.replace(/_/g, " ")}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-mono">
+                              {new Date(event.timestamp).toLocaleTimeString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600">{event.message}</p>
                         </div>
-                        <span className="text-xs text-gray-400">
-                          {new Date(event.timestamp).toLocaleTimeString("en-US", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                          })}
-                        </span>
                       </div>
-                      <p className="text-xs text-gray-600">{event.message}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

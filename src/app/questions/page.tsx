@@ -152,12 +152,27 @@ export default function QuestionsPage() {
           </div>
         ) : banks.length === 0 ? (
           <div className="card p-16 text-center animate-scale-in">
-            <p className="text-gray-500 mb-4">No question banks yet</p>
+            <svg className="w-28 h-28 mx-auto mb-6 text-gray-200" viewBox="0 0 120 120" fill="none">
+              <rect x="25" y="20" width="70" height="80" rx="6" stroke="currentColor" strokeWidth="2" />
+              <rect x="35" y="32" width="40" height="3" rx="1.5" fill="currentColor" opacity="0.4" />
+              <rect x="35" y="42" width="50" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <rect x="35" y="52" width="35" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <rect x="35" y="65" width="40" height="3" rx="1.5" fill="currentColor" opacity="0.4" />
+              <rect x="35" y="75" width="50" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <rect x="35" y="85" width="30" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+              <circle cx="85" cy="80" r="18" fill="#818cf8" opacity="0.1" stroke="#818cf8" strokeWidth="2" opacity="0.3" />
+              <path d="M82 80h6M85 77v6" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
+            </svg>
+            <p className="text-xl font-semibold text-gray-900 mb-2">No question banks yet</p>
+            <p className="text-gray-500 mb-6 max-w-sm mx-auto">Create reusable sets of interview questions organized by role and round type.</p>
             <button
               onClick={openCreate}
-              className="text-sm text-indigo-600 hover:text-indigo-800 transition font-medium"
+              className="btn-primary inline-flex items-center gap-2"
             >
-              Create your first question bank
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Question Bank
             </button>
           </div>
         ) : (
@@ -194,13 +209,27 @@ export default function QuestionsPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                  <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
                     <span>{bank.role}</span>
                     <span className="text-gray-300">&middot;</span>
                     <span>{bank.level}</span>
-                    <span className="text-gray-300">&middot;</span>
-                    <span>{qCount} question{qCount !== 1 ? "s" : ""}</span>
+                    <span className="ml-auto inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                      {qCount}
+                    </span>
                   </div>
+                  {/* Question preview */}
+                  {Array.isArray(bank.questions) && bank.questions.length > 0 && (
+                    <div className="pt-3 border-t border-gray-100 space-y-1.5">
+                      {bank.questions.slice(0, 2).map((q, qi) => (
+                        <p key={qi} className="text-xs text-gray-500 truncate">
+                          <span className="text-gray-400 mr-1">{qi + 1}.</span> {q}
+                        </p>
+                      ))}
+                      {bank.questions.length > 2 && (
+                        <p className="text-xs text-gray-400">+{bank.questions.length - 2} more</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
