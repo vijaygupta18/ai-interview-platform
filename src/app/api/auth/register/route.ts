@@ -26,19 +26,21 @@ export async function POST(req: Request) {
     const userId = uuidv4();
     let orgId = DEFAULT_ORG_ID;
     let role = "member";
+    let isActive = false; // New users are inactive by default
 
     if (orgName?.trim()) {
       orgId = uuidv4();
       role = "admin";
+      isActive = true; // Org creators are auto-activated
       await pool.query(
-        "INSERT INTO organizations (id, name) VALUES ($1, $2)",
-        [orgId, orgName.trim()]
+        "INSERT INTO organizations (id, name, slug) VALUES ($1, $2, $3)",
+        [orgId, orgName.trim(), orgName.trim().toLowerCase().replace(/\s+/g, "-")]
       );
     }
 
     await pool.query(
-      "INSERT INTO users (id, email, password_hash, name, org_id, role) VALUES ($1, $2, $3, $4, $5, $6)",
-      [userId, email, passwordHash, name, orgId, role]
+      "INSERT INTO users (id, email, password_hash, name, org_id, role, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [userId, email, passwordHash, name, orgId, role, isActive]
     );
 
     return NextResponse.json({
@@ -47,6 +49,8 @@ export async function POST(req: Request) {
       name,
       orgId,
       role,
+      isActive,
+      message: isActive ? "Account created and activated." : "Account created. Please wait for admin activation.",
     });
   } catch (err: any) {
     console.error("Registration error:", err);

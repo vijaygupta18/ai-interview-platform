@@ -15,7 +15,7 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
 
         const { rows } = await pool.query(
-          `SELECT u.id, u.email, u.name, u.password_hash, u.role, u.org_id, o.name as org_name
+          `SELECT u.id, u.email, u.name, u.password_hash, u.role, u.is_active, u.org_id, o.name as org_name
            FROM users u JOIN organizations o ON u.org_id = o.id
            WHERE u.email = $1`,
           [credentials.email]
@@ -26,6 +26,10 @@ export const authOptions: NextAuthOptions = {
         const user = rows[0];
         const valid = await bcrypt.compare(credentials.password, user.password_hash);
         if (!valid) return null;
+
+        if (!user.is_active) {
+          throw new Error("INACTIVE_ACCOUNT");
+        }
 
         return {
           id: user.id,
