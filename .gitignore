@@ -10,3 +10,4 @@ tsconfig.tsbuildinfo
 data/
 k8s/
 DEPLOYMENT.md
+SETUP.md
