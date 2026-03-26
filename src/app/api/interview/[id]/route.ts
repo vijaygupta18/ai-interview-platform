@@ -21,12 +21,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   return NextResponse.json(interview);
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { authorized, session } = await validateAccess(req, id);
+  if (!authorized || !session) {
+    return NextResponse.json({ error: "Unauthorized — admin access required" }, { status: 401 });
   }
 
   // Delete cascade handles transcript_entries, proctoring_events, interview_rounds
