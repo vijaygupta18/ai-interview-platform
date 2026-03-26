@@ -442,7 +442,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     if (!stream || !deepgramKeyRef.current) return;
 
     const dgSocket = new WebSocket(
-      "wss://api.deepgram.com/v1/listen?model=nova-2&punctuate=true&interim_results=true&endpointing=2000&vad_events=true",
+      "wss://api.deepgram.com/v1/listen?model=nova-2&language=en-IN&punctuate=true&interim_results=true&endpointing=2000&vad_events=true",
       ["token", deepgramKeyRef.current]
     );
     dgSocketRef.current = dgSocket;
