@@ -88,6 +88,7 @@ export default function DashboardPage() {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [scoringIds, setScoringIds] = useState<Set<string>>(new Set());
   const pageSize = 10;
 
   const fetchInterviews = useCallback(async () => {
@@ -109,6 +110,33 @@ export default function DashboardPage() {
     const interval = setInterval(fetchInterviews, 30000);
     return () => clearInterval(interval);
   }, [fetchInterviews]);
+
+  // Check scoring status for unscored interviews on load
+  useEffect(() => {
+    const unscored = interviews.filter((i) => !i.scorecard && i.transcript.length > 0);
+    if (unscored.length === 0) return;
+
+    const checkAll = async () => {
+      const generating = new Set<string>();
+      for (const interview of unscored) {
+        try {
+          const res = await fetch(`/api/scoring-status/${interview.id}`);
+          const data = await res.json();
+          if (data.status === "generating") generating.add(interview.id);
+          if (data.status === "completed") {
+            // Refresh to get the scorecard
+            fetchInterviews();
+          }
+        } catch {}
+      }
+      if (generating.size > 0) setScoringIds(generating);
+    };
+    checkAll();
+
+    // Poll every 10s if any are generating
+    const interval = setInterval(checkAll, 10000);
+    return () => clearInterval(interval);
+  }, [interviews, fetchInterviews]);
 
   const filtered = useMemo(() => {
     let result = interviews;
@@ -550,6 +578,7 @@ export default function DashboardPage() {
                               </Link>
                               {interview.transcript.length > 0 && (
                                 <button
+                                  disabled={scoringIds.has(interview.id)}
                                   onClick={async (e) => {
                                     e.stopPropagation();
                                     const btn = e.currentTarget;
@@ -564,6 +593,20 @@ export default function DashboardPage() {
                                       if (res.ok) {
                                         btn.textContent = "Done!";
                                         setTimeout(() => window.location.reload(), 1000);
+                                      } else if (res.status === 409) {
+                                        btn.textContent = "Scoring...";
+                                        // Poll until done
+                                        const poll = setInterval(async () => {
+                                          const s = await fetch(`/api/scoring-status/${interview.id}`).then(r => r.json());
+                                          if (s.status === "completed") {
+                                            clearInterval(poll);
+                                            window.location.reload();
+                                          } else if (s.status === "failed") {
+                                            clearInterval(poll);
+                                            btn.textContent = "Retry";
+                                            btn.disabled = false;
+                                          }
+                                        }, 5000);
                                       } else {
                                         btn.textContent = "Failed";
                                         btn.disabled = false;
@@ -575,7 +618,7 @@ export default function DashboardPage() {
                                   }}
                                   className="btn-secondary text-xs !px-3 !py-1.5"
                                 >
-                                  {interview.scorecard ? "Rescore" : "Score"}
+                                  {scoringIds.has(interview.id) ? "Scoring..." : interview.scorecard ? "Rescore" : "Score"}
                                 </button>
                               )}
                             </div>
