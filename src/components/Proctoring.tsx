@@ -43,21 +43,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
 
   useEffect(() => { canvasRef.current = document.createElement("canvas"); }, []);
 
-  // Tab switch detection — DEBOUNCED, only visibilitychange (not blur)
-  useEffect(() => {
-    if (!enabled) return;
-    const handle = () => {
-      if (document.hidden) {
-        const now = Date.now();
-        if (now - lastTabSwitchRef.current > 5000) {
-          lastTabSwitchRef.current = now;
-          alert("tab_switch", "flag", "Candidate switched tabs or windows");
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handle);
-    return () => document.removeEventListener("visibilitychange", handle);
-  }, [enabled, alert]);
+  // Tab switch detection is now handled by the combined window focus loss detector below
 
   // Fullscreen exit detection
   useEffect(() => {
@@ -76,18 +62,41 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   }, [enabled, alert]);
 
   // Window focus loss detection (switching to another app/screen)
+  // Uses multiple methods to catch all cases on all OS/browsers
   useEffect(() => {
     if (!enabled) return;
-    let lastBlur = 0;
-    const handleBlur = () => {
+    let lastAlert = 0;
+
+    const fireAlert = (source: string) => {
       const now = Date.now();
-      if (now - lastBlur > 10000) { // Debounce 10s
-        lastBlur = now;
-        alert("window_blur", "warning", "Candidate switched to another application or screen");
+      if (now - lastAlert > 5000) { // Debounce 5s across all methods
+        lastAlert = now;
+        alert("window_blur", "flag", `Candidate left the interview window (${source})`);
       }
     };
+
+    // Method 1: window.blur — fires when window loses focus
+    const handleBlur = () => fireAlert("window blur");
     window.addEventListener("blur", handleBlur);
-    return () => window.removeEventListener("blur", handleBlur);
+
+    // Method 2: document.visibilitychange — fires on tab switch AND some app switches
+    const handleVisibility = () => {
+      if (document.hidden) fireAlert("tab hidden");
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Method 3: Periodic focus check — catches cases where blur/visibility don't fire
+    const focusCheck = setInterval(() => {
+      if (!document.hasFocus()) {
+        fireAlert("focus lost");
+      }
+    }, 3000);
+
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(focusCheck);
+    };
   }, [enabled, alert]);
 
   // Copy-paste blocking — logged as info, NOT counted as strike

@@ -652,7 +652,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       setProctoringAlerts((prev) => [...prev, alert]);
 
       // Track violations — 4 strikes and you're out
-      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away", "fullscreen_exit", "window_blur"];
+      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away", "fullscreen_exit", "window_blur"]
+      // window_blur now covers: tab switch, app switch, focus lost (all as "flag" severity);
       if (strikeTypes.includes(event.type)) {
         setProctoringWarnings((prev) => {
           const next = prev + 1;
