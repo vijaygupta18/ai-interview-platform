@@ -404,13 +404,17 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
 
                 {/* Dimension Scores */}
                 <div className="space-y-3 mb-6">
-                  {Object.entries(dimensionLabels).map(([key, label]) => (
-                    <ScoreBar
-                      key={key}
-                      label={label}
-                      value={(interview.scorecard as any)[key] as number}
-                    />
-                  ))}
+                  {interview.scorecard.scores
+                    ? interview.scorecard.scores.map((s: any) => (
+                        <ScoreBar key={s.dimension} label={s.dimension} value={s.score} />
+                      ))
+                    : Object.entries(dimensionLabels).map(([key, label]) => (
+                        <ScoreBar
+                          key={key}
+                          label={label}
+                          value={(interview.scorecard as any)[key] as number}
+                        />
+                      ))}
                 </div>
 
                 {/* Strengths & Weaknesses */}
