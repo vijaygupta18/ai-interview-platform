@@ -12,13 +12,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const { id } = await params;
-    const { is_active } = await req.json();
+    const body = await req.json();
 
-    await pool.query("UPDATE users SET is_active = $1 WHERE id = $2 AND org_id = $3", [
-      is_active,
-      id,
-      (session.user as any).orgId,
-    ]);
+    const updates: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (typeof body.is_active === "boolean") {
+      updates.push(`is_active = $${idx++}`);
+      values.push(body.is_active);
+    }
+    if (body.role && ["admin", "interviewer", "member"].includes(body.role)) {
+      updates.push(`role = $${idx++}`);
+      values.push(body.role);
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+
+    values.push(id, (session.user as any).orgId);
+    await pool.query(`UPDATE users SET ${updates.join(", ")} WHERE id = $${idx++} AND org_id = $${idx}`, values);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

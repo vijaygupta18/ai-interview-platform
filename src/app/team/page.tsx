@@ -43,6 +43,16 @@ export default function TeamPage() {
     fetchUsers();
   };
 
+  const toggleRole = async (userId: string, currentRole: string) => {
+    const newRole = currentRole === "admin" ? "member" : "admin";
+    await fetch(`/api/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    fetchUsers();
+  };
+
   const deleteUser = async (userId: string, userName: string) => {
     if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
     await fetch(`/api/users/${userId}`, { method: "DELETE" });
@@ -132,6 +142,12 @@ export default function TeamPage() {
                           }`}
                         >
                           {user.is_active ? "Deactivate" : "Activate"}
+                        </button>
+                        <button
+                          onClick={() => toggleRole(user.id, user.role)}
+                          className="text-xs text-purple-600 border border-purple-200 hover:bg-purple-50 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          {user.role === "admin" ? "Remove Admin" : "Make Admin"}
                         </button>
                         <button
                           onClick={() => deleteUser(user.id, user.name)}
