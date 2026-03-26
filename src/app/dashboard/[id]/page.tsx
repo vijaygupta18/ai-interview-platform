@@ -484,6 +484,33 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
               )}
             </div>
 
+            {/* Proctoring Photos */}
+            {interview.proctoring.some((e: any) => e.photo) && (
+              <div className="card p-6 animate-fade-in-right delay-3">
+                <h2 className="text-sm font-semibold text-gray-900 mb-3">Candidate Snapshots</h2>
+                <p className="text-xs text-gray-500 mb-3">Periodic photos captured during the interview for integrity verification</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto">
+                  {interview.proctoring
+                    .filter((e: any) => e.photo)
+                    .map((e: any, i: number) => (
+                      <div key={i} className="relative group">
+                        <img
+                          src={e.photo}
+                          alt={`Capture ${i + 1}`}
+                          className="w-full aspect-[4/3] object-cover rounded-lg border border-gray-200 hover:border-indigo-300 transition-all cursor-pointer"
+                          onClick={() => window.open(e.photo, "_blank")}
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 rounded-b-lg px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-[9px] text-white">
+                            {new Date(e.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Proctoring Notes from Scorecard */}
             {interview.scorecard?.proctoringNotes && (
               <div className="card p-6 animate-fade-in-right delay-3">

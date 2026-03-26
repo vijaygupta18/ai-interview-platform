@@ -35,10 +35,11 @@ export interface TranscriptEntry {
 }
 
 export interface ProctoringEvent {
-  type: "eye_away" | "tab_switch" | "face_missing" | "multiple_faces" | "phone_detected";
-  severity: "warning" | "flag";
+  type: string;
+  severity: string;
   message: string;
   timestamp: string;
+  photo?: string;
 }
 
 export interface Scorecard {
@@ -159,7 +160,7 @@ async function getTranscript(interviewId: string): Promise<TranscriptEntry[]> {
 
 async function getProctoringEvents(interviewId: string): Promise<ProctoringEvent[]> {
   const { rows } = await pool.query(
-    "SELECT type, severity, message, created_at FROM proctoring_events WHERE interview_id = $1 ORDER BY id ASC",
+    "SELECT type, severity, message, photo, created_at FROM proctoring_events WHERE interview_id = $1 ORDER BY id ASC",
     [interviewId]
   );
   return rows.map((r) => ({
@@ -167,6 +168,7 @@ async function getProctoringEvents(interviewId: string): Promise<ProctoringEvent
     severity: r.severity,
     message: r.message,
     timestamp: r.created_at?.toISOString(),
+    ...(r.photo ? { photo: r.photo } : {}),
   }));
 }
 
@@ -217,9 +219,9 @@ export async function addTranscriptEntry(id: string, entry: TranscriptEntry): Pr
   );
 }
 
-export async function addProctoringEvent(id: string, event: ProctoringEvent): Promise<void> {
+export async function addProctoringEvent(id: string, event: ProctoringEvent & { photo?: string }): Promise<void> {
   await pool.query(
-    "INSERT INTO proctoring_events (interview_id, type, severity, message) VALUES ($1, $2, $3, $4)",
-    [id, event.type, event.severity, event.message]
+    "INSERT INTO proctoring_events (interview_id, type, severity, message, photo) VALUES ($1, $2, $3, $4, $5)",
+    [id, event.type, event.severity, event.message, event.photo || null]
   );
 }

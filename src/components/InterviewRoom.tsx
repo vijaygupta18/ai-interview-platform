@@ -606,13 +606,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         body: JSON.stringify({ interviewId, type: event.type, severity: event.severity || "warning", message: event.message }),
       }).catch(console.error);
 
-      // Track serious violations — 3 strikes and you're out
-      // Only "flag" severity counts — warnings and info don't
-      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected"];
-      if (strikeTypes.includes(event.type) && event.severity === "flag") {
+      // Track violations — 4 strikes and you're out
+      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away"];
+      if (strikeTypes.includes(event.type)) {
         setProctoringWarnings((prev) => {
           const next = prev + 1;
-          if (next >= 3) {
+          if (next >= 4) {
             setShowProctoringBan(true);
           }
           return next;
@@ -1115,7 +1114,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               : "bg-yellow-900/90 border-yellow-500/30 backdrop-blur"
           }`}>
             <div className="flex gap-1">
-              {[1, 2, 3].map((i) => (
+              {[1, 2, 3, 4].map((i) => (
                 <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                   i <= proctoringWarnings
                     ? "bg-red-500 border-red-400 scale-110"
@@ -1123,8 +1122,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 }`} />
               ))}
             </div>
-            <span className={`text-sm font-medium ${proctoringWarnings >= 2 ? "text-red-200" : "text-yellow-200"}`}>
-              Warning {proctoringWarnings}/3 — {proctoringWarnings >= 2 ? "Next violation will end the interview" : "Please look at the screen and stay focused"}
+            <span className={`text-sm font-medium ${proctoringWarnings >= 3 ? "text-red-200" : "text-yellow-200"}`}>
+              Warning {proctoringWarnings}/4 — {proctoringWarnings >= 3 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
             </span>
           </div>
         </div>
