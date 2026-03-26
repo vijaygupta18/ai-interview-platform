@@ -401,7 +401,7 @@ export default function DashboardPage() {
                 return (
                   <Link
                     key={interview.id}
-                    href={`/review/${interview.id}`}
+                    href={`/dashboard/${interview.id}`}
                     className="card-hover p-4 block animate-fade-in-up"
                     style={{ animationDelay: `${idx * 50}ms`, opacity: 0 }}
                   >
@@ -543,7 +543,7 @@ export default function DashboardPage() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <Link
-                                href={`/review/${interview.id}`}
+                                href={`/dashboard/${interview.id}`}
                                 className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
                               >
                                 View
