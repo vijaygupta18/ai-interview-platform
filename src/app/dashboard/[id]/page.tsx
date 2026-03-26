@@ -82,6 +82,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
   const [interview, setInterview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [scoringStatus, setScoringStatus] = useState<string>("unknown");
+  const [selectedPhoto, setSelectedPhoto] = useState<{ photo: string; timestamp: string } | null>(null);
 
   useEffect(() => {
     fetch(`/api/interview/${params.id}`)
@@ -548,8 +549,8 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
                         <img
                           src={e.photo}
                           alt={`Capture ${i + 1}`}
-                          className="w-full aspect-[4/3] object-cover rounded-lg border border-gray-200 hover:border-indigo-300 transition-all cursor-pointer"
-                          onClick={() => window.open(e.photo, "_blank")}
+                          className="w-full aspect-[4/3] object-cover rounded-lg border border-gray-200 hover:border-indigo-300 transition-all cursor-pointer hover:shadow-md"
+                          onClick={() => setSelectedPhoto({ photo: e.photo, timestamp: e.timestamp })}
                         />
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 rounded-b-lg px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <span className="text-[9px] text-white">
@@ -572,6 +573,38 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
           </div>
         </div>
       </div>
+
+      {/* Photo Lightbox Modal */}
+      {selectedPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <div
+            className="relative max-w-2xl w-full animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedPhoto.photo}
+              alt="Candidate snapshot"
+              className="w-full rounded-xl shadow-2xl border border-gray-700"
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 rounded-b-xl px-4 py-2 flex items-center justify-between">
+              <span className="text-sm text-white">
+                {new Date(selectedPhoto.timestamp).toLocaleString("en-US", {
+                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
+                })}
+              </span>
+              <button
+                onClick={() => setSelectedPhoto(null)}
+                className="text-xs text-gray-300 hover:text-white px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
