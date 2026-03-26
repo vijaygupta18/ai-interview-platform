@@ -54,6 +54,16 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     console.error("Registration error:", err);
-    return NextResponse.json({ error: "Registration failed" }, { status: 500 });
+    if (err.code === "23505") {
+      // Unique constraint violation
+      if (err.detail?.includes("email")) {
+        return NextResponse.json({ error: "This email is already registered" }, { status: 409 });
+      }
+      if (err.detail?.includes("slug")) {
+        return NextResponse.json({ error: "An organization with this name already exists" }, { status: 409 });
+      }
+      return NextResponse.json({ error: "Account already exists" }, { status: 409 });
+    }
+    return NextResponse.json({ error: "Registration failed. Please try again." }, { status: 500 });
   }
 }
