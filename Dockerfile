@@ -43,6 +43,8 @@ COPY --from=builder /app/migrations ./migrations
 # Copy modules not included in standalone (dynamically required)
 COPY --from=builder /app/node_modules/pdf-parse ./node_modules/pdf-parse
 COPY --from=builder /app/node_modules/node-ensure ./node_modules/node-ensure
+# pdf-parse@1.1.1 needs test data on first load (known bug)
+COPY --from=builder /app/node_modules/pdf-parse/test ./node_modules/pdf-parse/test
 
 # Create data directories
 RUN mkdir -p data/recordings data/proctoring && \
