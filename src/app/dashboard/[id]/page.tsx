@@ -241,6 +241,43 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
               <span className="text-gray-500">Focus:</span>{" "}
               <span className="text-gray-700">{interview.focusAreas.join(", ")}</span>
             </div>
+
+            {/* Interview Link + Actions */}
+            <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-gray-100">
+              {interview.token && (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="text-xs text-gray-500 shrink-0">Link:</span>
+                  <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200 flex-1 min-w-0">
+                    <input
+                      readOnly
+                      value={`${typeof window !== "undefined" ? window.location.origin : ""}/interview/${interview.id}?token=${interview.token}`}
+                      className="flex-1 bg-transparent text-xs text-gray-600 outline-none truncate"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/interview/${interview.id}?token=${interview.token}`);
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  if (!confirm("Delete this interview? This cannot be undone.")) return;
+                  try {
+                    const res = await fetch(`/api/interview/${interview.id}`, { method: "DELETE" });
+                    if (res.ok) window.location.href = "/";
+                    else alert("Failed to delete");
+                  } catch { alert("Failed to delete"); }
+                }}
+                className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
 
