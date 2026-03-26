@@ -1,0 +1,43 @@
+{
+  "name": "ai-interview-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^0.2.0",
+    "@deepgram/sdk": "^3.9.0",
+    "@google-cloud/text-to-speech": "^6.4.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/nodemailer": "^7.0.11",
+    "@types/pg": "^8.20.0",
+    "ai": "^4.0.0",
+    "bcryptjs": "^3.0.3",
+    "mammoth": "^1.12.0",
+    "monaco-editor": "^0.55.1",
+    "next": "^14.2.0",
+    "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.13",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.20.0",
+    "rate-limiter-flexible": "^10.0.1",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^9.0.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.4.0"
+  }
+}

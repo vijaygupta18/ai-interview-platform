@@ -1,0 +1,325 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { DashboardLayout } from "@/components/DashboardLayout";
+
+interface QuestionBank {
+  id: number;
+  org_id: string | null;
+  name: string;
+  role: string;
+  level: string;
+  round_type: string;
+  questions: string[];
+}
+
+const ROUND_TYPES = ["Technical", "Behavioral", "System Design", "Coding"];
+
+export default function QuestionsPage() {
+  const [banks, setBanks] = useState<QuestionBank[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingBank, setEditingBank] = useState<QuestionBank | null>(null);
+
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [level, setLevel] = useState("Senior");
+  const [roundType, setRoundType] = useState("Technical");
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [newQuestion, setNewQuestion] = useState("");
+
+  const fetchBanks = useCallback(async () => {
+    try {
+      const res = await fetch("/api/questions");
+      const data = await res.json();
+      setBanks(Array.isArray(data) ? data : []);
+    } catch {
+      console.error("Failed to fetch question banks");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBanks();
+  }, [fetchBanks]);
+
+  const resetForm = () => {
+    setName("");
+    setRole("");
+    setLevel("Senior");
+    setRoundType("Technical");
+    setQuestions([]);
+    setNewQuestion("");
+    setEditingBank(null);
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const openEdit = (bank: QuestionBank) => {
+    setEditingBank(bank);
+    setName(bank.name);
+    setRole(bank.role);
+    setLevel(bank.level);
+    setRoundType(bank.round_type);
+    setQuestions(Array.isArray(bank.questions) ? bank.questions : []);
+    setNewQuestion("");
+    setShowModal(true);
+  };
+
+  const addQuestion = () => {
+    if (newQuestion.trim()) {
+      setQuestions((prev) => [...prev, newQuestion.trim()]);
+      setNewQuestion("");
+    }
+  };
+
+  const removeQuestion = (idx: number) => {
+    setQuestions((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSave = async () => {
+    if (!name || !role || !level || !roundType) return;
+
+    const payload = { name, role, level, roundType, questions };
+
+    try {
+      if (editingBank) {
+        await fetch(`/api/questions/${editingBank.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await fetch("/api/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      setShowModal(false);
+      resetForm();
+      fetchBanks();
+    } catch {
+      console.error("Failed to save question bank");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Delete this question bank?")) return;
+    try {
+      await fetch(`/api/questions/${id}`, { method: "DELETE" });
+      fetchBanks();
+    } catch {
+      console.error("Failed to delete question bank");
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8 animate-fade-in">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Question Banks</h1>
+            <p className="text-sm text-gray-500 mt-1">Manage your interview question libraries</p>
+          </div>
+          <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Question Bank
+          </button>
+        </div>
+
+        {/* Banks List */}
+        {loading ? (
+          <div className="text-center py-20">
+            <svg className="w-8 h-8 mx-auto text-indigo-600 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+            </svg>
+          </div>
+        ) : banks.length === 0 ? (
+          <div className="card p-16 text-center">
+            <p className="text-gray-500 mb-4">No question banks yet</p>
+            <button
+              onClick={openCreate}
+              className="text-sm text-indigo-600 hover:text-indigo-800 transition font-medium"
+            >
+              Create your first question bank
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-slide-up">
+            {banks.map((bank) => {
+              const qCount = Array.isArray(bank.questions) ? bank.questions.length : 0;
+              return (
+                <div
+                  key={bank.id}
+                  className="card-hover p-5 group"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-semibold text-gray-900 truncate">{bank.name}</h3>
+                      <span className="badge-info mt-1">{bank.round_type}</span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={() => openEdit(bank)}
+                        className="p-1.5 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(bank.id)}
+                        className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-500">
+                    <span>{bank.role}</span>
+                    <span className="text-gray-300">&middot;</span>
+                    <span>{bank.level}</span>
+                    <span className="text-gray-300">&middot;</span>
+                    <span>{qCount} question{qCount !== 1 ? "s" : ""}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setShowModal(false)} />
+          <div className="relative w-full max-w-xl card p-6 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-gray-900 mb-5">
+              {editingBank ? "Edit Question Bank" : "Create Question Bank"}
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="label">Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Frontend Technical Questions"
+                  className="input-field"
+                />
+              </div>
+
+              <div>
+                <label className="label">Role</label>
+                <input
+                  type="text"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="e.g. Frontend Engineer"
+                  className="input-field"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Level</label>
+                  <select
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value)}
+                    className="input-field"
+                  >
+                    {["Junior", "Mid", "Senior", "Staff", "Principal"].map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Round Type</label>
+                  <select
+                    value={roundType}
+                    onChange={(e) => setRoundType(e.target.value)}
+                    className="input-field"
+                  >
+                    {ROUND_TYPES.map((rt) => (
+                      <option key={rt} value={rt}>{rt}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">
+                  Questions ({questions.length})
+                </label>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={newQuestion}
+                    onChange={(e) => setNewQuestion(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addQuestion())}
+                    placeholder="Type a question and press Add"
+                    className="input-field flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={addQuestion}
+                    className="btn-secondary"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {questions.map((q, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 group"
+                    >
+                      <span className="text-xs text-gray-400 mt-0.5 shrink-0">{i + 1}.</span>
+                      <p className="text-sm text-gray-700 flex-1">{q}</p>
+                      <button
+                        onClick={() => removeQuestion(i)}
+                        className="text-gray-300 hover:text-red-500 transition shrink-0 opacity-0 group-hover:opacity-100"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowModal(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!name || !role}
+                className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {editingBank ? "Update" : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}

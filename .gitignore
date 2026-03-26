@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env.local
+.env
+*.json.key
+data/recordings/
+_tmp_*
+_tts_*
+tsconfig.tsbuildinfo
+data/
