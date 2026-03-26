@@ -563,6 +563,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Resume STT is now handled in the media setup useEffect via needsResumeRef
 
   const handleStartInterview = useCallback(async () => {
+    // Request fullscreen
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (err) {
+      console.warn("Fullscreen request denied:", err);
+    }
+
     // Initialize countdown from interview duration (default 30 min)
     const durationMinutes = interviewData?.duration || 30;
     setRemainingSeconds(durationMinutes * 60);
@@ -645,7 +652,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       setProctoringAlerts((prev) => [...prev, alert]);
 
       // Track violations — 4 strikes and you're out
-      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away"];
+      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away", "fullscreen_exit", "window_blur"];
       if (strikeTypes.includes(event.type)) {
         setProctoringWarnings((prev) => {
           const next = prev + 1;

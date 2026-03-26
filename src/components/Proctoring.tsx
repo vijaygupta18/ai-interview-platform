@@ -59,6 +59,37 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     return () => document.removeEventListener("visibilitychange", handle);
   }, [enabled, alert]);
 
+  // Fullscreen exit detection
+  useEffect(() => {
+    if (!enabled) return;
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        alert("fullscreen_exit", "warning", "Candidate exited fullscreen mode");
+        // Try to re-enter fullscreen
+        setTimeout(() => {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }, 1000);
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [enabled, alert]);
+
+  // Window focus loss detection (switching to another app/screen)
+  useEffect(() => {
+    if (!enabled) return;
+    let lastBlur = 0;
+    const handleBlur = () => {
+      const now = Date.now();
+      if (now - lastBlur > 10000) { // Debounce 10s
+        lastBlur = now;
+        alert("window_blur", "warning", "Candidate switched to another application or screen");
+      }
+    };
+    window.addEventListener("blur", handleBlur);
+    return () => window.removeEventListener("blur", handleBlur);
+  }, [enabled, alert]);
+
   // Copy-paste blocking — logged as info, NOT counted as strike
   useEffect(() => {
     if (!enabled) return;
