@@ -122,7 +122,7 @@ export default function QuestionsPage() {
     <DashboardLayout>
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 animate-fade-in">
+        <div className="flex items-center justify-between mb-8 animate-fade-in-down">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Question Banks</h1>
             <p className="text-sm text-gray-500 mt-1">Manage your interview question libraries</p>
@@ -137,14 +137,21 @@ export default function QuestionsPage() {
 
         {/* Banks List */}
         {loading ? (
-          <div className="text-center py-20">
-            <svg className="w-8 h-8 mx-auto text-indigo-600 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
-            </svg>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="card p-5">
+                <div className="skeleton h-5 w-40 mb-3" />
+                <div className="skeleton h-6 w-20 rounded-full mb-3" />
+                <div className="flex items-center gap-3">
+                  <div className="skeleton h-3 w-20" />
+                  <div className="skeleton h-3 w-16" />
+                  <div className="skeleton h-3 w-24" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : banks.length === 0 ? (
-          <div className="card p-16 text-center">
+          <div className="card p-16 text-center animate-scale-in">
             <p className="text-gray-500 mb-4">No question banks yet</p>
             <button
               onClick={openCreate}
@@ -154,20 +161,21 @@ export default function QuestionsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 animate-slide-up">
-            {banks.map((bank) => {
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {banks.map((bank, idx) => {
               const qCount = Array.isArray(bank.questions) ? bank.questions.length : 0;
               return (
                 <div
                   key={bank.id}
-                  className="card-hover p-5 group"
+                  className="card-hover p-5 group animate-fade-in-up"
+                  style={{ animationDelay: `${idx * 60}ms`, opacity: 0 }}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-base font-semibold text-gray-900 truncate">{bank.name}</h3>
                       <span className="badge-info mt-1">{bank.round_type}</span>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <button
                         onClick={() => openEdit(bank)}
                         className="p-1.5 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
@@ -203,8 +211,11 @@ export default function QuestionsPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-xl card p-6 max-h-[85vh] overflow-y-auto">
+          <div
+            className="absolute inset-0 bg-black/20 transition-opacity duration-200"
+            onClick={() => setShowModal(false)}
+          />
+          <div className="relative w-full max-w-xl card p-6 max-h-[85vh] overflow-y-auto animate-scale-in">
             <h2 className="text-lg font-bold text-gray-900 mb-5">
               {editingBank ? "Edit Question Bank" : "Create Question Bank"}
             </h2>
@@ -284,7 +295,8 @@ export default function QuestionsPage() {
                   {questions.map((q, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 group"
+                      className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 group animate-fade-in-left"
+                      style={{ animationDelay: `${i * 30}ms` }}
                     >
                       <span className="text-xs text-gray-400 mt-0.5 shrink-0">{i + 1}.</span>
                       <p className="text-sm text-gray-700 flex-1">{q}</p>

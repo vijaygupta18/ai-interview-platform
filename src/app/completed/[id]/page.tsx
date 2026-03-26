@@ -17,9 +17,9 @@ export default function CompletedPage() {
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-10 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-10 text-center animate-fade-in-up">
           {/* Success checkmark */}
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50 animate-scale-in" style={{ animationDelay: "200ms", opacity: 0 }}>
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -33,15 +33,15 @@ export default function CompletedPage() {
             </svg>
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+          <h1 className="text-2xl font-bold text-gray-900 mb-3 animate-fade-in-up" style={{ animationDelay: "300ms", opacity: 0 }}>
             Interview Completed
           </h1>
 
-          <p className="text-gray-500 leading-relaxed mb-6">
+          <p className="text-gray-500 leading-relaxed mb-6 animate-fade-in-up" style={{ animationDelay: "400ms", opacity: 0 }}>
             Thank you for taking the time to complete this interview. Your responses have been recorded successfully.
           </p>
 
-          <div className="bg-gray-50 rounded-xl border border-gray-100 p-5 mb-6 text-left space-y-3">
+          <div className="bg-gray-50 rounded-xl border border-gray-100 p-5 mb-6 text-left space-y-3 animate-fade-in-up" style={{ animationDelay: "500ms", opacity: 0 }}>
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 text-indigo-600">
@@ -82,7 +82,7 @@ export default function CompletedPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6 animate-slide-in-up" style={{ animationDelay: "600ms", opacity: 0 }}>
             <div className="flex items-start gap-3">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0">
                 <circle cx="12" cy="12" r="10" />
@@ -99,7 +99,7 @@ export default function CompletedPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 animate-fade-in" style={{ animationDelay: "700ms", opacity: 0 }}>
             You can close this window now.
           </p>
         </div>

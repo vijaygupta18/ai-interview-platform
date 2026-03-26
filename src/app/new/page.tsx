@@ -120,12 +120,12 @@ export default function LandingPage() {
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6 animate-fade-in">Create Interview</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6 animate-fade-in-down">Create Interview</h1>
 
         {interviewLink ? (
           /* Success state */
-          <div className="card p-8 text-center space-y-6 animate-scale-in">
-            <div className="w-16 h-16 mx-auto rounded-full bg-green-50 flex items-center justify-center">
+          <div className="card p-8 text-center space-y-6 animate-scale-in" style={{ boxShadow: "0 0 30px rgba(34, 197, 94, 0.1)" }}>
+            <div className="w-16 h-16 mx-auto rounded-full bg-green-50 flex items-center justify-center animate-scale-in" style={{ animationDelay: "100ms", opacity: 0 }}>
               <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -171,7 +171,7 @@ export default function LandingPage() {
           </div>
         ) : (
           /* Form */
-          <div className="card p-6 animate-slide-up">
+          <div className="card p-6 animate-slide-in-up">
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Candidate Email */}
               <div>
@@ -268,9 +268,9 @@ export default function LandingPage() {
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all
+                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200
                     ${isDragging
-                      ? "border-indigo-400 bg-indigo-50"
+                      ? "border-indigo-400 bg-indigo-50 scale-[1.01]"
                       : file
                         ? "border-green-300 bg-green-50"
                         : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
@@ -355,10 +355,10 @@ export default function LandingPage() {
                       key={area}
                       type="button"
                       onClick={() => toggleFocus(area)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200
                         ${focusAreas.includes(area)
-                          ? "bg-indigo-50 text-indigo-600 border border-indigo-200"
-                          : "bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300 hover:text-gray-700"
+                          ? "bg-indigo-50 text-indigo-600 border border-indigo-200 scale-100"
+                          : "bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300 hover:text-gray-700 scale-[0.97] hover:scale-100"
                         }`}
                     >
                       {area}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
 interface Scorecard {
@@ -42,6 +42,23 @@ function RadarChart({ candidates }: { candidates: { label: string; scores: { dim
 
   const gridLevels = [2, 4, 6, 8, 10];
 
+  const polygonRefs = useRef<(SVGPolygonElement | null)[]>([]);
+
+  useEffect(() => {
+    polygonRefs.current.forEach((el, i) => {
+      if (el) {
+        el.style.opacity = "0";
+        el.style.transform = "scale(0.3)";
+        el.style.transformOrigin = `${cx}px ${cy}px`;
+        requestAnimationFrame(() => {
+          el.style.transition = `opacity 0.6s ease-out ${i * 150}ms, transform 0.6s ease-out ${i * 150}ms`;
+          el.style.opacity = "1";
+          el.style.transform = "scale(1)";
+        });
+      }
+    });
+  }, [candidates.length]);
+
   return (
     <svg viewBox="0 0 300 300" className="w-full max-w-[400px] mx-auto">
       {gridLevels.map((level) => (
@@ -63,6 +80,7 @@ function RadarChart({ candidates }: { candidates: { label: string; scores: { dim
       {candidates.map((cand, ci) => (
         <polygon
           key={ci}
+          ref={(el) => { polygonRefs.current[ci] = el; }}
           points={cand.scores.map((s, i) => {
             const p = getPoint(i, s.score);
             return `${p.x},${p.y}`;
@@ -135,18 +153,22 @@ export default function ComparePage() {
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
+        <div className="mb-8 animate-fade-in-down">
           <h1 className="text-2xl font-bold text-gray-900">Compare Candidates</h1>
           <p className="text-sm text-gray-500 mt-1">Select 2-4 completed interviews to compare side-by-side</p>
         </div>
 
         {/* Candidate Selector */}
-        <div className="card p-5 mb-6 animate-fade-in-delay-1">
+        <div className="card p-5 mb-6 animate-fade-in-up delay-1">
           <h3 className="text-sm font-medium text-gray-700 mb-3">
             Select Candidates ({selected.length}/4)
           </h3>
           {loading ? (
-            <p className="text-sm text-gray-500">Loading interviews...</p>
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="skeleton h-10 w-40 rounded-lg" />
+              ))}
+            </div>
           ) : interviews.length === 0 ? (
             <p className="text-sm text-gray-500">No completed interviews with scorecards found.</p>
           ) : (
@@ -159,7 +181,7 @@ export default function ComparePage() {
                     key={interview.id}
                     onClick={() => toggleSelect(interview.id)}
                     disabled={!isSelected && selected.length >= 4}
-                    className={`px-3 py-2 rounded-lg text-sm transition-all border ${
+                    className={`px-3 py-2 rounded-lg text-sm transition-all duration-200 border ${
                       isSelected
                         ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                         : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -183,7 +205,7 @@ export default function ComparePage() {
         {selectedInterviews.length >= 2 && (
           <>
             {/* Radar Chart */}
-            <div className="card p-5 mb-6">
+            <div className="card p-5 mb-6 animate-fade-in-up delay-2">
               <h3 className="text-sm font-medium text-gray-700 mb-4">Performance Radar</h3>
               <div className="flex items-center justify-center gap-4 mb-4 flex-wrap">
                 {selectedInterviews.map((interview, i) => (
@@ -216,7 +238,8 @@ export default function ComparePage() {
                 return (
                   <div
                     key={interview.id}
-                    className={`card p-5 ${isBest ? "ring-2 ring-green-500 ring-offset-2" : ""}`}
+                    className={`card p-5 animate-fade-in-up ${isBest ? "ring-2 ring-green-500 ring-offset-2" : ""} ${i === 0 ? "animate-fade-in-left" : i === selectedInterviews.length - 1 ? "animate-fade-in-right" : "animate-fade-in-up"}`}
+                    style={{ animationDelay: `${i * 100}ms`, opacity: 0 }}
                   >
                     <div className="mb-4">
                       <div className="flex items-center gap-2 mb-2">
@@ -261,7 +284,7 @@ export default function ComparePage() {
                             </div>
                             <div className="h-1.5 rounded-full bg-gray-100">
                               <div
-                                className={`h-full rounded-full transition-all ${
+                                className={`h-full rounded-full transition-all duration-700 ease-out ${
                                   isBestDim ? "bg-green-500" : isWorstDim ? "bg-red-500" : "bg-indigo-500"
                                 }`}
                                 style={{ width: `${(s.score / 10) * 100}%` }}
@@ -297,7 +320,7 @@ export default function ComparePage() {
 
             {/* Hiring Recommendation */}
             {bestCandidate && (
-              <div className="card p-5 border-green-200 bg-green-50/50">
+              <div className="card p-5 border-green-200 bg-green-50/50 animate-scale-in" style={{ animationDelay: "300ms", opacity: 0 }}>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 rounded-md bg-green-100 flex items-center justify-center">
                     <svg className="w-3.5 h-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -332,13 +355,13 @@ export default function ComparePage() {
         )}
 
         {selectedInterviews.length === 1 && (
-          <div className="text-center py-12 text-gray-500 text-sm">
+          <div className="text-center py-12 text-gray-500 text-sm animate-fade-in">
             Select at least one more candidate to compare.
           </div>
         )}
 
         {selectedInterviews.length === 0 && !loading && interviews.length > 0 && (
-          <div className="text-center py-12 text-gray-500 text-sm">
+          <div className="text-center py-12 text-gray-500 text-sm animate-fade-in">
             Select candidates above to start comparing.
           </div>
         )}
