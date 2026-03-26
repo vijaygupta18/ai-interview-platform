@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     if (questionBankId) {
       try {
         const { Pool } = await import("pg");
-        const pool = new Pool({ user: "postgres", host: "localhost", database: "ai_interview_platform", port: 5432 });
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform" });
         const { rows } = await pool.query("SELECT questions FROM question_banks WHERE id = $1", [questionBankId]);
         if (rows.length > 0 && rows[0].questions) {
           questionBankQuestions = Array.isArray(rows[0].questions) ? rows[0].questions : JSON.parse(rows[0].questions);

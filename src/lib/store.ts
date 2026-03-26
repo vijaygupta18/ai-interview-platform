@@ -1,10 +1,7 @@
 import { Pool } from "pg";
 
 const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "ai_interview_platform",
-  port: 5432,
+  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
 });
 
 export interface Interview {
