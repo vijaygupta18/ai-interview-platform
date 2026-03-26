@@ -653,6 +653,33 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               </li>
             ))}
           </ul>
+
+          {/* Environment Tips */}
+          <div className="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3.5">
+            <p className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wider">Before you start</p>
+            <ul className="space-y-1.5 text-xs text-zinc-400">
+              <li className="flex items-center gap-2">
+                <span className="text-green-400">&#10003;</span>
+                Sit in a quiet environment without background noise
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-green-400">&#10003;</span>
+                Ensure good lighting so your face is clearly visible
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-green-400">&#10003;</span>
+                Use headphones for best audio quality
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-green-400">&#10003;</span>
+                Close other tabs and applications
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-green-400">&#10003;</span>
+                Keep your ID ready if asked for verification
+              </li>
+            </ul>
+          </div>
           <div className="mt-6 space-y-3">
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" checked={consentCheck1} onChange={() => setConsentCheck1(!consentCheck1)} className="mt-0.5 h-4 w-4 accent-blue-500" />
@@ -817,20 +844,50 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             <div className="absolute bottom-4 left-4 rounded-lg bg-black/60 px-3 py-1.5 text-sm text-white backdrop-blur">
               {interviewData?.candidateName || "Candidate"}
             </div>
-            {/* AI Avatar overlay — top right of video */}
+            {/* AI Interviewer Avatar — top right of video */}
             <div className="absolute right-4 top-4 flex items-center gap-3">
-              <div className="relative">
+              <div className="relative" style={{ perspective: "400px" }}>
+                {/* 3D animated head */}
                 <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 ${isAISpeaking ? "shadow-lg shadow-blue-500/30" : ""}`}
+                  className={`w-14 h-14 rounded-full relative transition-all duration-300 ${isAISpeaking ? "shadow-lg shadow-blue-500/40" : ""}`}
+                  style={{
+                    transformStyle: "preserve-3d",
+                    animation: isAISpeaking ? "aiHeadBob 2s ease-in-out infinite" : "aiFloat 4s ease-in-out infinite",
+                  }}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" className="h-6 w-6">
-                    <path d="M12 2a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4Z" />
-                    <path d="M18 12a6 6 0 0 1-12 0" />
-                    <path d="M12 18v4m-3 0h6" />
-                  </svg>
+                  {/* Face base */}
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-b from-amber-200 to-amber-300 border-2 border-amber-400/30" />
+                  {/* Hair */}
+                  <div className="absolute -top-1 left-1 right-1 h-7 rounded-t-full bg-gray-800" style={{ borderRadius: "50% 50% 0 0" }} />
+                  {/* Eyes */}
+                  <div className="absolute top-[40%] left-[22%] w-2 h-2.5 bg-gray-800 rounded-full">
+                    <div className="absolute top-0.5 left-0.5 w-1 h-1 bg-white rounded-full" />
+                  </div>
+                  <div className="absolute top-[40%] right-[22%] w-2 h-2.5 bg-gray-800 rounded-full">
+                    <div className="absolute top-0.5 left-0.5 w-1 h-1 bg-white rounded-full" />
+                  </div>
+                  {/* Eyebrows */}
+                  <div className="absolute top-[32%] left-[18%] w-3 h-[2px] bg-gray-700 rounded-full -rotate-6" />
+                  <div className="absolute top-[32%] right-[18%] w-3 h-[2px] bg-gray-700 rounded-full rotate-6" />
+                  {/* Mouth - animated when speaking */}
+                  <div
+                    className="absolute bottom-[22%] left-1/2 -translate-x-1/2 bg-gray-700 rounded-full transition-all duration-150"
+                    style={{
+                      width: isAISpeaking ? "10px" : "8px",
+                      height: isAISpeaking ? "6px" : "2px",
+                      animation: isAISpeaking ? "aiMouthMove 0.3s ease-in-out infinite alternate" : "none",
+                    }}
+                  />
+                  {/* Cheeks */}
+                  <div className="absolute bottom-[30%] left-[12%] w-2 h-1.5 bg-pink-300/40 rounded-full" />
+                  <div className="absolute bottom-[30%] right-[12%] w-2 h-1.5 bg-pink-300/40 rounded-full" />
                 </div>
+                {/* Speaking rings */}
                 {isAISpeaking && (
-                  <div className="pulse-ring absolute inset-0 rounded-full border-2 border-blue-400" />
+                  <>
+                    <div className="pulse-ring absolute inset-0 rounded-full border-2 border-blue-400" />
+                    <div className="pulse-ring absolute -inset-1 rounded-full border border-blue-400/50" style={{ animationDelay: "0.5s" }} />
+                  </>
                 )}
               </div>
               <div className="rounded-lg bg-black/60 px-3 py-1.5 backdrop-blur">

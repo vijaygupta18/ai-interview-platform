@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const navItems = [
   {
@@ -48,6 +48,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
 
   const userInitial = session?.user?.name?.charAt(0)?.toUpperCase() || "U";
 
@@ -57,10 +59,18 @@ export function Sidebar() {
     return pathname === href || pathname.startsWith(href + "/");
   };
 
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const handleScroll = () => setScrolled(nav.scrollTop > 0);
+    nav.addEventListener("scroll", handleScroll);
+    return () => nav.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-gray-200">
+      <div className={`px-6 py-5 border-b border-gray-200 transition-shadow duration-200 ${scrolled ? "shadow-sm" : ""}`}>
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
             <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -72,7 +82,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav ref={navRef} className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <Link
             key={item.label}
@@ -123,14 +133,20 @@ export function Sidebar() {
       </button>
 
       {/* Mobile overlay */}
-      {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-200 shadow-xl">
-            {sidebarContent}
-          </div>
+      <div
+        className={`lg:hidden fixed inset-0 z-40 transition-opacity duration-300 ${
+          mobileOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="absolute inset-0 bg-black/20" onClick={() => setMobileOpen(false)} />
+        <div
+          className={`absolute left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-200 shadow-xl transition-transform duration-300 ease-out ${
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          {sidebarContent}
         </div>
-      )}
+      </div>
 
       {/* Desktop sidebar */}
       <div className="hidden lg:block fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-200">

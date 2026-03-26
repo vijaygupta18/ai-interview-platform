@@ -63,6 +63,20 @@ function scoreColor(score: number) {
   return "text-red-600";
 }
 
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-gray-100">
+      <td className="px-6 py-4"><div className="skeleton h-4 w-40" /><div className="skeleton h-3 w-24 mt-2" /></td>
+      <td className="px-6 py-4"><div className="skeleton h-4 w-28" /><div className="skeleton h-3 w-16 mt-2" /></td>
+      <td className="px-6 py-4"><div className="skeleton h-6 w-20 rounded-full" /></td>
+      <td className="px-6 py-4"><div className="skeleton h-4 w-8" /></td>
+      <td className="px-6 py-4"><div className="skeleton h-4 w-16" /></td>
+      <td className="px-6 py-4"><div className="skeleton h-4 w-24" /></td>
+      <td className="px-6 py-4"><div className="skeleton h-4 w-12" /></td>
+    </tr>
+  );
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [interviews, setInterviews] = useState<Interview[]>([]);
@@ -166,7 +180,7 @@ export default function DashboardPage() {
       case "waiting":
         return <span className="badge-warning">Waiting</span>;
       case "in_progress":
-        return <span className="badge-info">In Progress</span>;
+        return <span className="badge-info animate-pulse">In Progress</span>;
       case "completed":
         return <span className="badge-success">Completed</span>;
       default:
@@ -178,7 +192,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 animate-fade-in">
+        <div className="flex items-center justify-between mb-8 animate-fade-in-down">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Interviews</h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -188,7 +202,7 @@ export default function DashboardPage() {
               Manage and review all interview sessions
             </p>
           </div>
-          <Link href="/new" className="btn-primary flex items-center gap-2">
+          <Link href="/new" className="btn-primary flex items-center gap-2 hover:translate-y-[-1px] hover:shadow-md transition-all">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -200,12 +214,12 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-8">
           {[
             { label: "Total", value: stats.total, iconBg: "bg-gray-100", iconColor: "text-gray-600", icon: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10", delay: "" },
-            { label: "Waiting", value: stats.waiting, iconBg: "bg-amber-50", iconColor: "text-amber-600", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z", delay: "animate-fade-in-delay-1" },
-            { label: "In Progress", value: stats.inProgress, iconBg: "bg-blue-50", iconColor: "text-blue-600", icon: "M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z", delay: "animate-fade-in-delay-2" },
-            { label: "Completed", value: stats.completed, iconBg: "bg-green-50", iconColor: "text-green-600", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", delay: "animate-fade-in-delay-3" },
-            { label: "Avg Score", value: stats.avgScore, iconBg: "bg-indigo-50", iconColor: "text-indigo-600", icon: "M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z", delay: "animate-fade-in-delay-4" },
+            { label: "Waiting", value: stats.waiting, iconBg: "bg-amber-50", iconColor: "text-amber-600", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z", delay: "delay-1" },
+            { label: "In Progress", value: stats.inProgress, iconBg: "bg-blue-50", iconColor: "text-blue-600", icon: "M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z", delay: "delay-2" },
+            { label: "Completed", value: stats.completed, iconBg: "bg-green-50", iconColor: "text-green-600", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", delay: "delay-3" },
+            { label: "Avg Score", value: stats.avgScore, iconBg: "bg-indigo-50", iconColor: "text-indigo-600", icon: "M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z", delay: "delay-4" },
           ].map((stat) => (
-            <div key={stat.label} className={`card p-4 ${stat.delay || "animate-fade-in"}`}>
+            <div key={stat.label} className={`card p-4 animate-fade-in-up ${stat.delay}`}>
               <div className="flex items-center gap-3 mb-2">
                 <div className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center`}>
                   <svg className={`w-4.5 h-4.5 ${stat.iconColor}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -214,13 +228,13 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{stat.label}</p>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+              <p className="text-2xl font-bold text-gray-900 animate-count-up">{stat.value}</p>
             </div>
           ))}
         </div>
 
         {/* Search + Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6 animate-fade-in-delay-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6 animate-fade-in-up delay-3">
           <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -257,17 +271,52 @@ export default function DashboardPage() {
         </div>
 
         {/* Content */}
-        <div className="animate-slide-up">
+        <div className="animate-fade-in-up delay-4">
         {loading ? (
-          <div className="card p-12 text-center">
-            <svg className="w-8 h-8 mx-auto text-indigo-600 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
-            </svg>
-            <p className="text-gray-500 mt-4">Loading interviews...</p>
-          </div>
+          <>
+            {/* Mobile skeleton */}
+            <div className="md:hidden space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="card p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="skeleton h-4 w-40 mb-2" />
+                      <div className="skeleton h-3 w-24" />
+                    </div>
+                    <div className="skeleton h-6 w-20 rounded-full" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="skeleton h-3 w-16" />
+                    <div className="skeleton h-3 w-12" />
+                    <div className="skeleton h-3 w-24 ml-auto" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop skeleton */}
+            <div className="card overflow-hidden hidden md:block">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Candidate</th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Role</th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Status</th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Score</th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Proctoring</th>
+                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Date</th>
+                    <th className="px-6 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  <SkeletonRow />
+                  <SkeletonRow />
+                  <SkeletonRow />
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : error ? (
-          <div className="card p-12 text-center">
+          <div className="card p-12 text-center animate-scale-in">
             <div className="w-12 h-12 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-3">
               <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -279,7 +328,7 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : filtered.length === 0 && interviews.length === 0 ? (
-          <div className="card p-16 text-center">
+          <div className="card p-16 text-center animate-scale-in">
             <p className="text-lg font-medium text-gray-900">No interviews yet</p>
             <p className="text-sm text-gray-500 mt-1 mb-6">Create your first one to get started</p>
             <Link href="/new" className="btn-primary inline-flex items-center gap-2">
@@ -290,7 +339,7 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="card p-12 text-center">
+          <div className="card p-12 text-center animate-scale-in">
             <p className="text-gray-500">No interviews match your filters</p>
             <button
               onClick={() => { setSearch(""); setStatusFilter("all"); }}
@@ -303,11 +352,16 @@ export default function DashboardPage() {
           <>
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
-              {filtered.map((interview) => {
+              {filtered.map((interview, idx) => {
                 const flagCount = interview.proctoring.filter((p) => p.severity === "flag").length;
                 const warningCount = interview.proctoring.filter((p) => p.severity === "warning").length;
                 return (
-                  <Link key={interview.id} href={`/review/${interview.id}`} className="card-hover p-4 block">
+                  <Link
+                    key={interview.id}
+                    href={`/review/${interview.id}`}
+                    className="card-hover p-4 block animate-fade-in-up"
+                    style={{ animationDelay: `${idx * 50}ms`, opacity: 0 }}
+                  >
                     <div className="flex items-start justify-between mb-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{interview.candidateEmail || interview.resumeFileName}</p>
@@ -374,7 +428,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((interview) => {
+                    {filtered.map((interview, idx) => {
                       const flagCount = interview.proctoring.filter((p) => p.severity === "flag").length;
                       const warningCount = interview.proctoring.filter((p) => p.severity === "warning").length;
                       const totalIssues = flagCount + warningCount;
@@ -382,7 +436,8 @@ export default function DashboardPage() {
                       return (
                         <tr
                           key={interview.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                          className="border-b border-gray-100 hover:bg-gray-50 transition-all duration-200 hover:border-l-2 hover:border-l-indigo-500 animate-table-row"
+                          style={{ animationDelay: `${idx * 50}ms`, opacity: 0 }}
                         >
                           <td className="px-6 py-4">
                             <p className="text-sm font-medium text-gray-900">

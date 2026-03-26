@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
@@ -31,11 +31,27 @@ function ScoreBar({ value, label }: { value: number; label: string }) {
   const pct = (value / 5) * 100;
   const color =
     value >= 4 ? "bg-green-500" : value >= 3 ? "bg-blue-500" : value >= 2 ? "bg-amber-500" : "bg-red-500";
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = barRef.current;
+    if (el) {
+      el.style.width = "0%";
+      requestAnimationFrame(() => {
+        el.style.width = `${pct}%`;
+      });
+    }
+  }, [pct]);
+
   return (
     <div className="flex items-center gap-3">
       <span className="text-sm text-gray-600 w-36 shrink-0">{label}</span>
       <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+        <div
+          ref={barRef}
+          className={`h-full rounded-full ${color} transition-all duration-700 ease-out`}
+          style={{ width: "0%" }}
+        />
       </div>
       <span className="text-sm font-semibold text-gray-900 w-8 text-right">{value}</span>
     </div>
@@ -48,6 +64,19 @@ const recommendationBadge: Record<string, string> = {
   no_hire: "badge-danger",
   strong_no_hire: "badge-danger",
 };
+
+function SkeletonCard({ className = "" }: { className?: string }) {
+  return (
+    <div className={`card p-6 ${className}`}>
+      <div className="skeleton h-5 w-32 mb-4" />
+      <div className="space-y-3">
+        <div className="skeleton h-4 w-full" />
+        <div className="skeleton h-4 w-3/4" />
+        <div className="skeleton h-4 w-1/2" />
+      </div>
+    </div>
+  );
+}
 
 export default function InterviewDetailPage({ params }: { params: { id: string } }) {
   const [interview, setInterview] = useState<any>(null);
@@ -80,8 +109,23 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center gap-2 text-sm mb-6">
+            <div className="skeleton h-4 w-20" />
+            <div className="skeleton h-4 w-4" />
+            <div className="skeleton h-4 w-40" />
+          </div>
+          <SkeletonCard className="mb-6" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <SkeletonCard />
+              <SkeletonCard />
+            </div>
+            <div className="space-y-6">
+              <SkeletonCard />
+              <SkeletonCard />
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -90,7 +134,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
   if (!interview) {
     return (
       <DashboardLayout>
-        <div className="card p-8 text-center max-w-md mx-auto">
+        <div className="card p-8 text-center max-w-md mx-auto animate-scale-in">
           <p className="text-gray-500">Interview not found</p>
           <Link href="/dashboard" className="text-sm text-indigo-600 mt-4 block">Back to Dashboard</Link>
         </div>
@@ -101,7 +145,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
   const statusBadge = (status: string) => {
     switch (status) {
       case "waiting": return <span className="badge-warning">Waiting</span>;
-      case "in_progress": return <span className="badge-info">In Progress</span>;
+      case "in_progress": return <span className="badge-info animate-pulse">In Progress</span>;
       case "completed": return <span className="badge-success">Completed</span>;
       default: return <span className="badge-info">{status}</span>;
     }
@@ -114,7 +158,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm mb-6 animate-fade-in">
+        <div className="flex items-center gap-2 text-sm mb-6 animate-fade-in-down">
           <Link href="/dashboard" className="text-gray-500 hover:text-gray-700 transition-colors">
             Interviews
           </Link>
@@ -127,7 +171,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
         </div>
 
         {/* Header Card */}
-        <div className="card p-6 mb-6 animate-fade-in-delay-1">
+        <div className="card p-6 mb-6 animate-fade-in-up">
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-xl font-bold text-gray-900">
@@ -169,12 +213,12 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-up">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Scorecard + Transcript */}
           <div className="lg:col-span-2 space-y-6">
             {/* Generate Scorecard CTA */}
             {!interview.scorecard && interview.transcript.length > 0 && (
-              <div className="card p-6 text-center">
+              <div className="card p-6 text-center animate-fade-in-up delay-1">
                 <p className="text-gray-500 mb-4">No scorecard generated yet.</p>
                 <button
                   id="rescore-btn"
@@ -212,7 +256,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
 
             {/* Scorecard */}
             {interview.scorecard && (
-              <div className="card p-6">
+              <div className="card p-6 animate-fade-in-up delay-1">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900">Scorecard</h2>
                   <button
@@ -305,7 +349,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
                     <h3 className="text-sm font-medium text-gray-900 mb-3">Evidence</h3>
                     <div className="space-y-3">
                       {interview.scorecard.evidence.map((e: any, i: number) => (
-                        <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100 animate-fade-in-up" style={{ animationDelay: `${i * 50}ms`, opacity: 0 }}>
                           <p className="text-xs font-medium text-indigo-600 mb-1">{e.dimension}</p>
                           <p className="text-sm text-gray-500 italic">&ldquo;{e.quote}&rdquo;</p>
                           <p className="text-sm text-gray-700 mt-1">{e.assessment}</p>
@@ -318,7 +362,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
             )}
 
             {/* Transcript */}
-            <div className="card p-6">
+            <div className="card p-6 animate-fade-in-up delay-2">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
                 Transcript
                 <span className="text-sm font-normal text-gray-500 ml-2">
@@ -333,7 +377,8 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
                   {interview.transcript.map((entry: any, i: number) => (
                     <div
                       key={i}
-                      className={`flex gap-3 ${entry.role === "ai" ? "" : "flex-row-reverse"}`}
+                      className={`flex gap-3 animate-fade-in-up ${entry.role === "ai" ? "" : "flex-row-reverse"}`}
+                      style={{ animationDelay: `${i * 30}ms`, opacity: 0 }}
                     >
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
@@ -370,7 +415,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
           {/* Right Sidebar */}
           <div className="space-y-6">
             {/* Resume Info */}
-            <div className="card p-6">
+            <div className="card p-6 animate-fade-in-right delay-1">
               <h2 className="text-lg font-semibold text-gray-900 mb-3">Resume</h2>
               <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
                 <div className="flex items-center gap-2">
@@ -391,7 +436,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
             </div>
 
             {/* Proctoring Events */}
-            <div className="card p-6">
+            <div className="card p-6 animate-fade-in-right delay-2">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Proctoring</h2>
               <p className="text-xs text-gray-500 mb-4">
                 {flagCount} flag{flagCount !== 1 ? "s" : ""}, {warningCount} warning{warningCount !== 1 ? "s" : ""}
@@ -441,7 +486,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
 
             {/* Proctoring Notes from Scorecard */}
             {interview.scorecard?.proctoringNotes && (
-              <div className="card p-6">
+              <div className="card p-6 animate-fade-in-right delay-3">
                 <h2 className="text-sm font-semibold text-gray-900 mb-2">Proctoring Assessment</h2>
                 <p className="text-sm text-gray-600 leading-relaxed">{interview.scorecard.proctoringNotes}</p>
               </div>

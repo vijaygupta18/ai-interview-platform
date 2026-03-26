@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
@@ -64,12 +64,26 @@ function ScoreRing({ score, label }: { score: number; label: string }) {
         ? "#d97706"
         : "#dc2626";
 
+  const circleRef = useRef<SVGCircleElement>(null);
+
+  useEffect(() => {
+    const el = circleRef.current;
+    if (el) {
+      el.style.strokeDashoffset = String(circumference);
+      requestAnimationFrame(() => {
+        el.style.transition = "stroke-dashoffset 1s ease-out";
+        el.style.strokeDashoffset = String(circumference - progress);
+      });
+    }
+  }, [circumference, progress]);
+
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative w-24 h-24">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
           <circle cx="40" cy="40" r={radius} fill="none" stroke="#f3f4f6" strokeWidth="4" />
           <circle
+            ref={circleRef}
             cx="40"
             cy="40"
             r={radius}
@@ -78,8 +92,7 @@ function ScoreRing({ score, label }: { score: number; label: string }) {
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray={circumference}
-            strokeDashoffset={circumference - progress}
-            className="transition-all duration-1000 ease-out"
+            strokeDashoffset={circumference}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
@@ -106,6 +119,19 @@ function RecommendationBadge({ recommendation }: { recommendation: string }) {
   };
   const c = config[recommendation] || config.no_hire;
   return <span className={c.className}>{c.label}</span>;
+}
+
+function SkeletonCard({ className = "" }: { className?: string }) {
+  return (
+    <div className={`card p-6 ${className}`}>
+      <div className="skeleton h-5 w-32 mb-4" />
+      <div className="space-y-3">
+        <div className="skeleton h-4 w-full" />
+        <div className="skeleton h-4 w-3/4" />
+        <div className="skeleton h-4 w-1/2" />
+      </div>
+    </div>
+  );
 }
 
 export default function ReviewPage() {
@@ -162,11 +188,21 @@ export default function ReviewPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center space-y-4">
-            <div className="w-12 h-12 mx-auto border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-            <p className="text-sm text-gray-500">Loading interview scorecard...</p>
+        <div className="max-w-5xl mx-auto space-y-6">
+          <SkeletonCard />
+          <div className="card p-6">
+            <div className="skeleton h-5 w-24 mb-6" />
+            <div className="flex justify-center gap-10">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <div className="skeleton w-24 h-24 rounded-full" />
+                  <div className="skeleton h-3 w-16" />
+                </div>
+              ))}
+            </div>
           </div>
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       </DashboardLayout>
     );
@@ -175,7 +211,7 @@ export default function ReviewPage() {
   if (error || !data) {
     return (
       <DashboardLayout>
-        <div className="card p-8 text-center max-w-md mx-auto">
+        <div className="card p-8 text-center max-w-md mx-auto animate-scale-in">
           <div className="w-12 h-12 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-4">
             <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -190,7 +226,7 @@ export default function ReviewPage() {
   if (!data.scorecard) {
     return (
       <DashboardLayout>
-        <div className="card p-8 text-center max-w-md mx-auto space-y-4">
+        <div className="card p-8 text-center max-w-md mx-auto space-y-4 animate-scale-in">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7 text-amber-500">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -248,7 +284,7 @@ export default function ReviewPage() {
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
-        <div className="card p-6 animate-fade-in flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="card p-6 animate-fade-in-up flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-xl font-bold text-gray-900">
@@ -297,7 +333,7 @@ export default function ReviewPage() {
         </div>
 
         {/* Score Rings */}
-        <div className="card p-6 animate-fade-in-delay-1">
+        <div className="card p-6 animate-fade-in-up delay-1">
           <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-6">
             Scores
           </h2>
@@ -309,7 +345,7 @@ export default function ReviewPage() {
         </div>
 
         {/* Assessment Summary */}
-        <div className="card p-6 space-y-5 animate-fade-in-delay-2">
+        <div className="card p-6 space-y-5 animate-fade-in-up delay-2">
           <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
             Assessment
           </h2>
@@ -347,13 +383,13 @@ export default function ReviewPage() {
         </div>
 
         {/* Tabbed sections */}
-        <div className="card overflow-hidden animate-fade-in-delay-3">
+        <div className="card overflow-hidden animate-fade-in-up delay-3">
           <div className="flex border-b border-gray-200">
             {(["evidence", "proctoring", "transcript"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-4 py-3 text-sm font-medium capitalize transition-colors
+                className={`flex-1 px-4 py-3 text-sm font-medium capitalize transition-all duration-200
                   ${activeTab === tab
                     ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50"
                     : "text-gray-500 hover:text-gray-700"
@@ -367,9 +403,13 @@ export default function ReviewPage() {
           <div className="p-6">
             {/* Evidence */}
             {activeTab === "evidence" && (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-fade-in">
                 {scorecard.evidence.map((ev, i) => (
-                  <div key={i} className="bg-gray-50 rounded-lg p-4 space-y-2 border border-gray-100">
+                  <div
+                    key={i}
+                    className="bg-gray-50 rounded-lg p-4 space-y-2 border border-gray-100 animate-slide-in-up"
+                    style={{ animationDelay: `${i * 60}ms`, opacity: 0 }}
+                  >
                     <span className="text-xs font-medium text-indigo-600 uppercase tracking-wider">
                       {ev.dimension}
                     </span>
@@ -387,7 +427,7 @@ export default function ReviewPage() {
 
             {/* Proctoring */}
             {activeTab === "proctoring" && (
-              <div className="space-y-2">
+              <div className="space-y-2 animate-fade-in">
                 {proctoring.length === 0 ? (
                   <div className="text-center py-8">
                     <svg className="w-8 h-8 mx-auto text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -399,7 +439,8 @@ export default function ReviewPage() {
                   proctoring.map((event, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3 border border-gray-100"
+                      className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3 border border-gray-100 animate-fade-in-left"
+                      style={{ animationDelay: `${i * 40}ms`, opacity: 0 }}
                     >
                       <span className={`w-2 h-2 rounded-full shrink-0 ${
                         event.severity === "flag" ? "bg-red-500" : event.severity === "warning" ? "bg-amber-500" : "bg-blue-500"
@@ -419,14 +460,15 @@ export default function ReviewPage() {
 
             {/* Transcript */}
             {activeTab === "transcript" && (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 animate-fade-in">
                 {transcript.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-8">No transcript available</p>
                 ) : (
                   transcript.map((msg, i) => (
                     <div
                       key={i}
-                      className={`flex gap-3 ${msg.role === "ai" ? "" : "flex-row-reverse"}`}
+                      className={`flex gap-3 animate-fade-in-up ${msg.role === "ai" ? "" : "flex-row-reverse"}`}
+                      style={{ animationDelay: `${i * 30}ms`, opacity: 0 }}
                     >
                       <div
                         className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-medium
