@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getInterview, addTranscriptEntry } from "@/lib/store";
 import { getAIResponse } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
-import { validateInterviewExists } from "@/lib/auth-check";
+import { validateAccessPost } from "@/lib/auth-check";
 
 export async function POST(req: Request) {
   try {
@@ -10,13 +10,13 @@ export async function POST(req: Request) {
     if (!rateLimit(ip, 30, 60000)) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
-    const { interviewId, transcript } = await req.json();
+    const { interviewId, transcript, token } = await req.json();
 
     if (!interviewId) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
-    if (!(await validateInterviewExists(interviewId))) {
+    if (!(await validateAccessPost(interviewId, token))) {
       return NextResponse.json({ error: "Invalid interview" }, { status: 403 });
     }
 

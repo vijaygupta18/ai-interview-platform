@@ -125,6 +125,10 @@ export async function POST(req: Request) {
     const id = randomUUID();
     const token = randomBytes(32).toString("hex");
 
+    // Interview link expires 7 days from now by default
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
     const interview: Interview = {
       id,
       resume: resumeText,
@@ -147,6 +151,7 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString(),
       startedAt: null,
       endedAt: null,
+      expiresAt: expiresAt.toISOString(),
       orgId: (session?.user as any)?.orgId || undefined,
       createdBy: (session?.user as any)?.id || undefined,
     };

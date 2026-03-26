@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getInterview, updateInterview } from "@/lib/store";
 import { generateScorecard } from "@/lib/ai";
-import { startScoring, completeScoring, failScoring, getScoringStatus } from "@/lib/scoring-tracker";
+import { startScoring, completeScoring, failScoring } from "@/lib/scoring-tracker";
 import { normalizeScorecard } from "@/lib/normalize-scorecard";
 
 export async function POST(req: Request) {
@@ -12,12 +12,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
-    // Check if already being scored (DB-backed, survives restarts)
-    const status = await getScoringStatus(interviewId);
-    if (status.status === "generating") {
-      return NextResponse.json({ error: "Scorecard is already being generated", status: "generating" }, { status: 409 });
-    }
-
+    // Atomic check-and-set — no separate getScoringStatus needed
     if (!(await startScoring(interviewId))) {
       return NextResponse.json({ error: "Scoring already in progress" }, { status: 409 });
     }
@@ -54,9 +49,13 @@ export async function POST(req: Request) {
     await completeScoring(interviewId);
     return NextResponse.json(scorecard);
   } catch (error) {
-    const interviewId = (await req.clone().json().catch(() => ({}))).interviewId;
-    if (interviewId) await failScoring(interviewId, (error as Error).message);
     console.error("Scorecard generation error:", error);
+    try {
+      const interviewId = (await req.clone().json().catch(() => ({}))).interviewId;
+      if (interviewId) await failScoring(interviewId, (error as Error).message);
+    } catch (failErr) {
+      console.error("Failed to mark scoring as failed:", failErr);
+    }
     return NextResponse.json({ error: "Failed to generate scorecard" }, { status: 500 });
   }
 }

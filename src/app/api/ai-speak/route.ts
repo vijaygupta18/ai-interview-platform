@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getInterview, addTranscriptEntry } from "@/lib/store";
 import { getAIResponse } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
-import { validateInterviewExists } from "@/lib/auth-check";
+import { validateAccessPost } from "@/lib/auth-check";
 
 // Combined AI response + TTS in ONE endpoint
 // Returns audio directly — no separate TTS call needed
@@ -13,13 +13,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
-    const { interviewId, transcript } = await req.json();
+    const { interviewId, transcript, token } = await req.json();
 
     if (!interviewId) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
-    if (!(await validateInterviewExists(interviewId))) {
+    if (!(await validateAccessPost(interviewId, token))) {
       return NextResponse.json({ error: "Invalid interview" }, { status: 403 });
     }
 
@@ -28,27 +28,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
     }
 
-    // Save candidate message in background (don't await)
+    // Save candidate message
     if (transcript?.length > 0) {
       const lastEntry = transcript[transcript.length - 1];
       if (lastEntry.role === "candidate" && lastEntry.text) {
-        addTranscriptEntry(interviewId, {
+        await addTranscriptEntry(interviewId, {
           role: "candidate",
           text: lastEntry.text,
           timestamp: new Date().toISOString(),
-        }).catch(console.error);
+        });
       }
     }
 
     // Get AI response
     const aiText = await getAIResponse(interview, transcript ?? interview.transcript);
 
-    // Save AI message in background (don't await)
-    addTranscriptEntry(interviewId, {
+    // Save AI message
+    await addTranscriptEntry(interviewId, {
       role: "ai",
       text: aiText,
       timestamp: new Date().toISOString(),
-    }).catch(console.error);
+    });
 
     // Generate TTS audio
     const apiKey = process.env.DEEPGRAM_API_KEY;

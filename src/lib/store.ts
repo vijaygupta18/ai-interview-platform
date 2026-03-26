@@ -22,6 +22,7 @@ export interface Interview {
   createdAt: string;
   startedAt: string | null;
   endedAt: string | null;
+  expiresAt: string | null;
   orgId?: string;
   createdBy?: string;
 }
@@ -53,8 +54,8 @@ export interface Scorecard {
 
 export async function saveInterview(interview: Omit<Interview, "transcript" | "proctoring">): Promise<void> {
   await pool.query(
-    `INSERT INTO interviews (id, resume, resume_file_name, candidate_email, candidate_name, candidate_phone, token, browser_fingerprint, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at, org_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+    `INSERT INTO interviews (id, resume, resume_file_name, candidate_email, candidate_name, candidate_phone, token, browser_fingerprint, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at, expires_at, org_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
      ON CONFLICT (id) DO UPDATE SET
        status = EXCLUDED.status,
        scorecard = EXCLUDED.scorecard,
@@ -81,6 +82,7 @@ export async function saveInterview(interview: Omit<Interview, "transcript" | "p
       interview.createdAt,
       interview.startedAt,
       interview.endedAt,
+      interview.expiresAt,
       interview.orgId || null,
       interview.createdBy || null,
     ]
@@ -117,6 +119,45 @@ export async function getInterview(id: string): Promise<Interview | null> {
     createdAt: row.created_at?.toISOString(),
     startedAt: row.started_at?.toISOString() || null,
     endedAt: row.ended_at?.toISOString() || null,
+    expiresAt: row.expires_at?.toISOString() || null,
+    orgId: row.org_id || null,
+    createdBy: row.created_by || null,
+  };
+}
+
+export async function getInterviewWithPhotos(id: string): Promise<Interview | null> {
+  const { rows } = await pool.query("SELECT * FROM interviews WHERE id = $1", [id]);
+  if (rows.length === 0) return null;
+
+  const row = rows[0];
+  const transcript = await getTranscript(id);
+  const proctoring = await getProctoringEventsWithPhotos(id);
+
+  return {
+    id: row.id,
+    resume: row.resume,
+    resumeFileName: row.resume_file_name,
+    candidateEmail: row.candidate_email || "",
+    candidateName: row.candidate_name || "",
+    candidatePhone: row.candidate_phone || "",
+    token: row.token || "",
+    browserFingerprint: row.browser_fingerprint || null,
+    role: row.role,
+    level: row.level,
+    focusAreas: row.focus_areas,
+    duration: row.duration,
+    roundType: row.round_type || "General",
+    language: row.language || "",
+    status: row.status,
+    transcript,
+    proctoring,
+    scorecard: row.scorecard,
+    createdAt: row.created_at?.toISOString(),
+    startedAt: row.started_at?.toISOString() || null,
+    endedAt: row.ended_at?.toISOString() || null,
+    expiresAt: row.expires_at?.toISOString() || null,
+    orgId: row.org_id || null,
+    createdBy: row.created_by || null,
   };
 }
 
@@ -166,6 +207,19 @@ async function getTranscript(interviewId: string): Promise<TranscriptEntry[]> {
 
 async function getProctoringEvents(interviewId: string): Promise<ProctoringEvent[]> {
   const { rows } = await pool.query(
+    "SELECT type, severity, message, created_at FROM proctoring_events WHERE interview_id = $1 ORDER BY id ASC",
+    [interviewId]
+  );
+  return rows.map((r) => ({
+    type: r.type,
+    severity: r.severity,
+    message: r.message,
+    timestamp: r.created_at?.toISOString(),
+  }));
+}
+
+async function getProctoringEventsWithPhotos(interviewId: string): Promise<ProctoringEvent[]> {
+  const { rows } = await pool.query(
     "SELECT type, severity, message, photo, created_at FROM proctoring_events WHERE interview_id = $1 ORDER BY id ASC",
     [interviewId]
   );
@@ -176,6 +230,14 @@ async function getProctoringEvents(interviewId: string): Promise<ProctoringEvent
     timestamp: r.created_at?.toISOString(),
     ...(r.photo ? { photo: r.photo } : {}),
   }));
+}
+
+export async function getProctoringViolationCount(interviewId: string): Promise<number> {
+  const { rows } = await pool.query(
+    "SELECT count(*) FROM proctoring_events WHERE interview_id = $1 AND type IN ('face_missing','multiple_faces','tab_switch','screen_share_stopped','phone_detected','eye_away') AND severity = 'flag'",
+    [interviewId]
+  );
+  return parseInt(rows[0].count);
 }
 
 export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, "resume">[]> {
@@ -195,7 +257,7 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
       [ids]
     ),
     pool.query(
-      "SELECT interview_id, type, severity, message, photo, created_at FROM proctoring_events WHERE interview_id = ANY($1) ORDER BY id ASC",
+      "SELECT interview_id, type, severity, message, created_at FROM proctoring_events WHERE interview_id = ANY($1) ORDER BY id ASC",
       [ids]
     ),
   ]);
@@ -215,7 +277,6 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
       severity: r.severity,
       message: r.message,
       timestamp: r.created_at?.toISOString(),
-      ...(r.photo ? { photo: r.photo } : {}),
     });
     proctoringMap.set(r.interview_id, events);
   }
@@ -242,6 +303,9 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
     createdAt: row.created_at?.toISOString(),
     startedAt: row.started_at?.toISOString() || null,
     endedAt: row.ended_at?.toISOString() || null,
+    expiresAt: row.expires_at?.toISOString() || null,
+    orgId: row.org_id || null,
+    createdBy: row.created_by || null,
   }));
 }
 

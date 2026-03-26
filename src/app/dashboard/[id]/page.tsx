@@ -88,7 +88,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
   const [selectedPhoto, setSelectedPhoto] = useState<{ photo: string; timestamp: string } | null>(null);
 
   useEffect(() => {
-    fetch(`/api/interview/${params.id}`)
+    fetch(`/api/interview/${params.id}?photos=true`)
       .then((r) => r.json())
       .then((data) => {
         if (data.scorecard && !data.scorecard.scores && data.scorecard.technicalDepth !== undefined) {

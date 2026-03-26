@@ -29,3 +29,20 @@ export async function validateInterviewExists(interviewId: string): Promise<bool
   const { rows } = await pool.query("SELECT id FROM interviews WHERE id = $1", [interviewId]);
   return rows.length > 0;
 }
+
+/**
+ * Validates access for POST endpoints: checks session OR interview token from request body.
+ */
+export async function validateAccessPost(interviewId: string, token?: string): Promise<boolean> {
+  // Check session first (interviewer)
+  const session = await getServerSession(authOptions);
+  if (session?.user) return true;
+
+  // Check token (candidate)
+  if (token) {
+    const { rows } = await pool.query("SELECT id FROM interviews WHERE id = $1 AND token = $2", [interviewId, token]);
+    if (rows.length > 0) return true;
+  }
+
+  return false;
+}

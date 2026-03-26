@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS interviews (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     started_at TIMESTAMPTZ,
     ended_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
 
     -- Results
     scorecard JSONB,

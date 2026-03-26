@@ -15,15 +15,24 @@ export function stripThinking(text: string): string {
   // Remove everything before a closing think tag (content starts after it)
   cleaned = cleaned.replace(/^[\s\S]*?<\/(?:think|thinking|reasoning|thought)>\s*/i, "");
 
+  // First check if response has obvious thinking markers
+  const hasThinkingMarkers = /<think|^\d+\.\s*(NOT|I'm |First|Then)/mi.test(cleaned);
+  if (!hasThinkingMarkers) {
+    // No thinking detected — return as-is (just clean XML tags)
+    // Final cleanup: remove stray formatting
+    cleaned = cleaned.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").trim();
+    return cleaned || text.trim();
+  }
+
   // Split into paragraphs
   const paragraphs = cleaned.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
 
-  // Filter out paragraphs that are clearly thinking/planning
+  // Only apply aggressive paragraph filtering when thinking is detected
   const isThinking = (p: string): boolean => {
     // Numbered lists (1. Do X, 2. Do Y)
     if (/^\d+\.\s/.test(p) && /\d+\.\s/.test(p)) return true;
     // Starts with thinking keywords
-    if (/^(?:The user|I need|I should|Let me|Since |Wait|Actually|Looking|Given|My |Key |Current|Constraint|Remember|Note|This is the|I'm going|I'll |The candidate|Plan|Step)/i.test(p)) return true;
+    if (/^(?:The user|I need|I should|Let me|Wait|My |Key |Current|Constraint|Remember|Note|The candidate|Plan|Step)/i.test(p)) return true;
     // Contains meta-commentary markers
     if (/(?:I need to|I should|Let me|constraints? check|meta-commentary|thinking tag|reasoning|spoken via TTS|system prompt)/i.test(p)) return true;
     // Bullet/dash lists about rules

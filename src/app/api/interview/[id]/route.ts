@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getInterview } from "@/lib/store";
+import { getInterview, getInterviewWithPhotos } from "@/lib/store";
 import { validateAccess } from "@/lib/auth-check";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -13,9 +13,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const interview = await getInterview(id);
+  const url = new URL(req.url);
+  const includePhotos = url.searchParams.get("photos") === "true";
+
+  const interview = includePhotos
+    ? await getInterviewWithPhotos(id)
+    : await getInterview(id);
   if (!interview) {
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+  }
+
+  // Check if the interview link has expired
+  if (interview.expiresAt && new Date(interview.expiresAt) < new Date()) {
+    return NextResponse.json({ error: "This interview link has expired", expired: true }, { status: 410 });
   }
 
   return NextResponse.json(interview);

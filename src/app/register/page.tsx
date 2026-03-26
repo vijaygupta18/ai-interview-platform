@@ -22,7 +22,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name, orgName: orgName || undefined }),
+        body: JSON.stringify({ email, password, name, orgName }),
       });
 
       const data = await res.json();
@@ -176,26 +176,26 @@ export default function RegisterPage() {
                 <input
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   className="input-field !py-2.5"
                 />
+                <p className="text-xs text-gray-400 mt-1">At least 8 characters</p>
               </div>
 
               <div>
-                <label className="label">
-                  Organization Name <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
+                <label className="label">Organization Name</label>
                 <input
                   type="text"
+                  required
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
-                  placeholder="Leave empty to join default org"
+                  placeholder="Your company or team name"
                   className="input-field !py-2.5"
                 />
-                <p className="text-xs text-gray-400 mt-1.5">Create a new organization or leave blank to join the default one</p>
+                <p className="text-xs text-gray-400 mt-1.5">A new organization will be created for your account</p>
               </div>
 
               <button

@@ -51,6 +51,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isEnding, setIsEnding] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const [sttConnected, setSttConnected] = useState(false);
 
   // Pre-interview checks
   const [cameraReady, setCameraReady] = useState(false);
@@ -81,16 +83,27 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const isEndingRef = useRef(false);
   const speakTextRef = useRef<(text: string) => Promise<void>>();
   const needsResumeRef = useRef(false);
+  const reconnectCountRef = useRef(0);
+  const tokenRef = useRef("");
 
   // Fetch interview data + deepgram key on mount
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    tokenRef.current = searchParams.get("token") || "";
     async function init() {
       try {
+        const tokenParam = tokenRef.current ? `?token=${tokenRef.current}` : "";
         const [interviewRes, tokenRes] = await Promise.all([
-          fetch(`/api/interview/${interviewId}`),
-          fetch("/api/deepgram-token"),
+          fetch(`/api/interview/${interviewId}${tokenParam}`),
+          fetch(`/api/deepgram-token${tokenParam}`),
         ]);
         const interview = await interviewRes.json();
+        // Check if interview link has expired
+        if (interview.expired || (interview.expiresAt && new Date(interview.expiresAt) < new Date())) {
+          setExpired(true);
+          setIsLoading(false);
+          return;
+        }
         // Redirect to review if interview is already completed
         if (interview.status === "completed") {
           window.location.href = `/completed/${interviewId}`;
@@ -126,6 +139,18 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 timestamp: new Date(t.timestamp).getTime(),
               }))
             );
+          }
+
+          // Fetch server-side violation count for resume
+          try {
+            const violationRes = await fetch(`/api/interview/${interviewId}/violations${tokenParam}`);
+            if (violationRes.ok) {
+              const { count } = await violationRes.json();
+              setProctoringWarnings(count);
+              if (count >= 4) setShowProctoringBan(true);
+            }
+          } catch (err) {
+            console.error("Failed to fetch violation count:", err);
           }
 
           setRemainingSeconds(remaining);
@@ -250,6 +275,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           body: JSON.stringify({
             interviewId,
             transcript,
+            token: tokenRef.current,
             systemNote: "Time is up. Please wrap up and say goodbye to the candidate.",
           }),
         });
@@ -343,7 +369,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         const res = await fetch("/api/ai-speak", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ interviewId, transcript: currentTranscript }),
+          body: JSON.stringify({ interviewId, transcript: currentTranscript, token: tokenRef.current }),
         });
 
         const contentType = res.headers.get("Content-Type") || "";
@@ -419,6 +445,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     dgSocketRef.current = dgSocket;
 
     dgSocket.onopen = () => {
+      reconnectCountRef.current = 0;
+      setSttConnected(true);
       // Extract audio-only stream for MediaRecorder
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length === 0) {
@@ -507,9 +535,19 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     };
 
     dgSocket.onclose = () => {
-      console.log("Deepgram connection closed");
+      console.log("[STT] Connection closed, attempting reconnect...");
+      setSttConnected(false);
+      // Only reconnect if interview is still active and under max retries
+      if (isStarted && !isEndingRef.current && reconnectCountRef.current < 5) {
+        reconnectCountRef.current++;
+        const delay = 2000 * reconnectCountRef.current; // exponential backoff
+        console.log(`[STT] Reconnecting in ${delay}ms (attempt ${reconnectCountRef.current}/5)...`);
+        setTimeout(() => {
+          startDeepgramSTT();
+        }, delay);
+      }
     };
-  }, [getAIResponse]);
+  }, [getAIResponse, isStarted]);
 
   // Start STT (used for both fresh start and resume)
   const beginListening = useCallback(() => {
@@ -600,11 +638,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         timestamp: Date.now(),
       };
       setProctoringAlerts((prev) => [...prev, alert]);
-      fetch("/api/proctor-event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interviewId, type: event.type, severity: event.severity || "warning", message: event.message }),
-      }).catch(console.error);
 
       // Track violations — 4 strikes and you're out
       const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away"];
@@ -640,6 +673,21 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  // ─── Expired Screen ───────────────────────────────────────────────────────
+  if (expired) {
+    return (
+      <div className="flex h-screen items-center justify-center px-4">
+        <div className="glass w-full max-w-sm rounded-2xl p-8 text-center">
+          <div className="mb-4 text-4xl text-zinc-500">&#9202;</div>
+          <h2 className="text-xl font-semibold text-white">Interview Link Expired</h2>
+          <p className="mt-3 text-sm text-zinc-400">
+            This interview link has expired. Please contact the interviewer for a new link.
+          </p>
+        </div>
       </div>
     );
   }
@@ -902,7 +950,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             {formatTime(remainingSeconds)}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* STT Connection Status */}
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex h-2 w-2 rounded-full ${sttConnected ? "bg-green-500" : "bg-red-500"}`} />
+            {!sttConnected && (
+              <span className="text-xs text-red-400">Reconnecting...</span>
+            )}
+          </div>
           <AudioRecorder interviewId={interviewId} mediaStream={mediaStreamRef.current} enabled={isStarted} />
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
@@ -1177,6 +1232,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         interviewId={interviewId}
         enabled={isStarted && !isEndingRef.current}
         onAlert={onProctoringEvent}
+        token={tokenRef.current}
       />
 
       {/* End Confirmation Modal */}

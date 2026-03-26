@@ -13,19 +13,20 @@ interface ProctoringProps {
   interviewId: string;
   enabled: boolean;
   onAlert: (alert: ProctoringAlert) => void;
+  token?: string;
 }
 
-async function sendProctoringEvent(interviewId: string, type: string, severity: string, message: string) {
+async function sendProctoringEvent(interviewId: string, type: string, severity: string, message: string, token?: string) {
   try {
     await fetch("/api/proctor-event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ interviewId, type, severity, message }),
+      body: JSON.stringify({ interviewId, type, severity, message, token }),
     });
   } catch {}
 }
 
-export default function Proctoring({ videoRef, interviewId, enabled, onAlert }: ProctoringProps) {
+export default function Proctoring({ videoRef, interviewId, enabled, onAlert, token }: ProctoringProps) {
   const faceDetectorRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastFaceTimeRef = useRef(Date.now());
@@ -35,9 +36,9 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert }: 
   const alert = useCallback(
     (type: string, severity: string, message: string) => {
       onAlert({ type, severity, message });
-      sendProctoringEvent(interviewId, type, severity, message);
+      sendProctoringEvent(interviewId, type, severity, message, token);
     },
-    [onAlert, interviewId]
+    [onAlert, interviewId, token]
   );
 
   useEffect(() => { canvasRef.current = document.createElement("canvas"); }, []);
@@ -164,7 +165,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert }: 
       fetch("/api/proctor-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interviewId, type: "photo_capture", severity: "info", message: `Photo #${photoCountRef.current}`, photo: dataUrl }),
+        body: JSON.stringify({ interviewId, type: "photo_capture", severity: "info", message: `Photo #${photoCountRef.current}`, photo: dataUrl, token }),
       }).catch(() => {});
     };
     const first = setTimeout(capture, 30000);
