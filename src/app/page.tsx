@@ -87,6 +87,8 @@ export default function DashboardPage() {
   const [verdictFilter, setVerdictFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const fetchInterviews = useCallback(async () => {
     try {
@@ -151,6 +153,15 @@ export default function DashboardPage() {
 
     return result;
   }, [interviews, statusFilter, verdictFilter, search, sortField, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paginatedFiltered = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1); }, [statusFilter, verdictFilter, search]);
 
   const stats = useMemo(() => {
     const scored = interviews.filter((i) => i.scorecard);
@@ -384,7 +395,7 @@ export default function DashboardPage() {
           <>
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
-              {filtered.map((interview, idx) => {
+              {paginatedFiltered.map((interview, idx) => {
                 const flagCount = interview.proctoring.filter((p) => p.severity === "flag").length;
                 const warningCount = interview.proctoring.filter((p) => p.severity === "warning").length;
                 return (
@@ -463,7 +474,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((interview, idx) => {
+                    {paginatedFiltered.map((interview, idx) => {
                       const flagCount = interview.proctoring.filter((p) => p.severity === "flag").length;
                       const warningCount = interview.proctoring.filter((p) => p.severity === "warning").length;
                       const totalIssues = flagCount + warningCount;
@@ -576,11 +587,42 @@ export default function DashboardPage() {
                 </table>
               </div>
 
-              {/* Footer */}
+              {/* Footer with pagination */}
               <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50">
                 <p className="text-xs text-gray-500">
-                  Showing {filtered.length} of {interviews.length} interview{interviews.length !== 1 ? "s" : ""}
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, filtered.length)}-{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length} interview{filtered.length !== 1 ? "s" : ""}
                 </p>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-2.5 py-1 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-7 h-7 rounded-md text-xs font-medium transition-all ${
+                          currentPage === page
+                            ? "bg-indigo-600 text-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-2.5 py-1 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
                 <p className="text-xs text-gray-400">Auto-refreshes every 30s</p>
               </div>
             </div>

@@ -44,14 +44,31 @@ function stripThinking(text: string): string {
 }
 
 function buildSystemPrompt(interview: Interview): string {
-  return `You are Alex, a senior interviewer conducting a technical interview. Role: ${interview.role}, Level: ${interview.level}, Focus: ${interview.focusAreas.join(", ")}. Duration: ${interview.duration} min.
+  const focusStr = interview.focusAreas.join(", ");
+  return `You are Alex, a senior interviewer at a top tech company. You are conducting a ${interview.duration}-minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
 
-Your output goes to TTS so reply ONLY with spoken words. Two to four sentences max. One question at a time. Be professional, warm but sharp. Probe deep on system design and scalability. If they give a textbook answer, push for real production experience. Ask follow-ups if answers are vague.`;
+OUTPUT RULES (strict):
+- Your entire output will be spoken aloud via text-to-speech
+- Reply with ONLY what you would say as a human interviewer
+- 2-4 sentences maximum per response
+- One question at a time, never multiple
+- No markdown, no bullets, no asterisks, no formatting
+- No meta-commentary about what you are doing
+
+INTERVIEW STRATEGY:
+- Opening: greet warmly, introduce yourself as Alex, ask candidate to briefly introduce themselves
+- Questions: start with their resume/experience, then move to ${focusStr.toLowerCase()} topics
+- Follow-ups: if an answer is vague or surface-level, dig deeper with "Can you be more specific?" or "What tradeoffs did you consider?"
+- Probe for real production experience, not textbook knowledge. Ask "what actually happened" and "what would you do differently"
+- Calibrate difficulty to ${interview.level} level
+- Pace: cover all focus areas within ${interview.duration} minutes, roughly ${Math.floor(interview.duration / (interview.focusAreas.length || 1))} min per area
+- Last 3-4 minutes: ask if the candidate has any questions for you, then thank them professionally
+- React naturally to answers before asking the next question ("That makes sense", "Interesting approach", "I see")`;
 }
 
 function buildResumeContext(interview: Interview): string {
   const resume = interview.resume?.substring(0, 3000) || "No resume provided.";
-  return `Candidate resume:\n${resume}`;
+  return `Here is the candidate's resume. Use it to ask specific, targeted questions about their past work:\n\n${resume}`;
 }
 
 async function callJuspayAI(
@@ -118,34 +135,54 @@ export async function generateScorecard(interview: Interview): Promise<string> {
     ? interview.proctoring.map((e) => `[${e.severity.toUpperCase()}] ${e.type}: ${e.message} at ${e.timestamp}`).join("\n")
     : "No proctoring issues detected.";
 
-  const scorecardPrompt = `You are an expert interview evaluator. Analyze the following interview transcript and produce a detailed scorecard.
+  const scorecardPrompt = `You are a senior hiring manager evaluating an interview for a ${interview.level} ${interview.role} position. Focus areas were: ${interview.focusAreas.join(", ")}.
 
-Role: ${interview.role}
-Level: ${interview.level}
-Focus Areas: ${interview.focusAreas.join(", ")}
+SCORING RUBRIC:
+- 5 = Exceptional. Exceeds bar significantly. Would be a top performer.
+- 4 = Strong. Meets bar with room to grow. Solid hire.
+- 3 = Adequate. Meets minimum bar. Borderline.
+- 2 = Below bar. Significant gaps. Would struggle in the role.
+- 1 = Far below bar. Fundamental gaps in required skills.
 
-## Transcript
+EVALUATION CRITERIA:
+- technicalDepth: depth of technical knowledge, ability to go beyond surface level, understanding of internals
+- communication: clarity of explanation, structured thinking, ability to articulate complex ideas
+- problemSolving: approach to novel problems, debugging methodology, handling ambiguity
+- domainKnowledge: understanding of the specific domain (${interview.role}), tools, best practices
+- cultureFit: collaboration mindset, ownership, curiosity, how they handle being challenged
+
+RECOMMENDATION GUIDE:
+- strong_hire: overall >= 4 AND no dimension below 3
+- hire: overall >= 3.5 AND no dimension below 2
+- no_hire: overall < 3 OR any critical dimension below 2
+- strong_no_hire: overall < 2 OR fundamental dishonesty/inability to answer basic questions
+
+EVIDENCE: For each dimension, cite an EXACT quote from the candidate's responses and explain why it demonstrates that score level. Include at least 3-4 evidence items.
+
+PROCTORING: Note any integrity concerns from proctoring events. If the candidate switched tabs, had face detection issues, or other flags, factor that into the assessment.
+
+## Interview Transcript
 ${transcriptText}
 
 ## Proctoring Events
 ${proctoringText}
 
-## Output Format (respond in valid JSON only, no markdown, no code blocks)
+Respond with ONLY valid JSON, no markdown, no code blocks, no explanation outside the JSON:
 {
   "technicalDepth": <1-5>,
   "communication": <1-5>,
   "problemSolving": <1-5>,
   "domainKnowledge": <1-5>,
   "cultureFit": <1-5>,
-  "overall": <1-5>,
+  "overall": <1-5 weighted average>,
   "recommendation": "<strong_hire|hire|no_hire|strong_no_hire>",
-  "summary": "<2-3 sentence overall assessment>",
-  "strengths": ["<strength1>", "<strength2>"],
-  "weaknesses": ["<weakness1>", "<weakness2>"],
+  "summary": "<3-4 sentence assessment covering strengths, gaps, and hiring recommendation with reasoning>",
+  "strengths": ["<specific strength with example>", "<another>"],
+  "weaknesses": ["<specific weakness with example>", "<another>"],
   "evidence": [
-    {"dimension": "<category>", "quote": "<exact candidate quote>", "assessment": "<your analysis>"}
+    {"dimension": "<technicalDepth|communication|problemSolving|domainKnowledge|cultureFit>", "quote": "<exact candidate quote>", "assessment": "<why this quote supports the score>"}
   ],
-  "proctoringNotes": "<summary of any proctoring concerns or 'No issues detected'>"
+  "proctoringNotes": "<summary of integrity concerns or 'No issues detected'>"
 }`;
 
   return callJuspayAI([{ role: "system", content: scorecardPrompt }], 2000, 0.3);
