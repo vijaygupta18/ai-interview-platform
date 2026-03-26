@@ -16,12 +16,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     endedAt: new Date().toISOString(),
   });
 
-  // Auto-generate scorecard in background if transcript exists
-  if (interview.transcript.length > 0 && !interview.scorecard) {
-    generateScorecardInBackground(id, interview);
-  }
+  // Return immediately — candidate doesn't wait
+  const response = NextResponse.json({ ok: true });
 
-  return NextResponse.json({ ok: true });
+  // Auto-generate scorecard in background after a short delay
+  // Delay ensures all transcript entries are saved (they're fire-and-forget)
+  setTimeout(async () => {
+    try {
+      const freshInterview = await getInterview(id);
+      if (freshInterview && freshInterview.transcript.length > 0 && !freshInterview.scorecard) {
+        generateScorecardInBackground(id, freshInterview);
+      }
+    } catch (err) {
+      console.error(`[Auto-Score] Failed to fetch interview ${id}:`, err);
+    }
+  }, 3000);
+
+  return response;
 }
 
 async function generateScorecardInBackground(id: string, interview: any) {
