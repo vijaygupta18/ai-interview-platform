@@ -159,6 +159,7 @@ export default function DashboardPage() {
       const q = search.toLowerCase();
       result = result.filter(
         (i) =>
+          ((i as any).candidateName || "").toLowerCase().includes(q) ||
           i.candidateEmail.toLowerCase().includes(q) ||
           i.role.toLowerCase().includes(q) ||
           i.resumeFileName.toLowerCase().includes(q)
@@ -309,7 +310,7 @@ export default function DashboardPage() {
             </svg>
             <input
               type="text"
-              placeholder="Search by email, role, or file..."
+              placeholder="Search by name, email, or role..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="input-field pl-10"
@@ -466,8 +467,8 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{interview.candidateEmail || interview.resumeFileName}</p>
-                        <p className="text-xs text-gray-500">{interview.role} &middot; {interview.level}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{(interview as any).candidateName || interview.candidateEmail || interview.resumeFileName}</p>
+                        <p className="text-xs text-gray-500">{(interview as any).candidateName ? interview.candidateEmail : ""} {interview.role} &middot; {interview.level}</p>
                       </div>
                       {statusBadge(interview.status)}
                     </div>
@@ -546,10 +547,10 @@ export default function DashboardPage() {
                         >
                           <td className="px-6 py-4">
                             <p className="text-sm font-medium text-gray-900">
-                              {interview.candidateEmail || interview.resumeFileName}
+                              {(interview as any).candidateName || interview.candidateEmail || interview.resumeFileName}
                             </p>
-                            {interview.candidateEmail && (
-                              <p className="text-xs text-gray-500 mt-0.5">{interview.resumeFileName}</p>
+                            {(interview as any).candidateName && (
+                              <p className="text-xs text-gray-500 mt-0.5">{interview.candidateEmail}</p>
                             )}
                           </td>
                           <td className="px-6 py-4">
