@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     const duration = parseInt(formData.get("duration") as string) || 30;
     const roundType = (formData.get("roundType") as string) || "General";
     const language = (formData.get("language") as string) || "";
+    const additionalContext = (formData.get("additionalContext") as string) || "";
     const questionBankId = formData.get("questionBankId") as string;
 
     if (!role || !level) {
@@ -102,6 +103,11 @@ export async function POST(req: Request) {
     // Append question bank questions to resume context
     if (questionBankQuestions.length > 0) {
       resumeText += `\n\n--- QUESTION BANK ---\nUse these questions during the interview:\n${questionBankQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
+    }
+
+    // Append additional context (test scores, hiring manager notes, etc.)
+    if (additionalContext) {
+      resumeText += `\n\n--- INTERVIEWER NOTES ---\nThe hiring team has provided the following context. Use this to guide your questions and probe specific areas:\n${additionalContext}`;
     }
 
     const session = await getServerSession(authOptions);

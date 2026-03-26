@@ -43,6 +43,7 @@ export default function LandingPage() {
   const [roundType, setRoundType] = useState("General");
   const [codingLanguage, setCodingLanguage] = useState("JavaScript");
   const [focusAreas, setFocusAreas] = useState<string[]>(["Technical"]);
+  const [additionalContext, setAdditionalContext] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -92,6 +93,7 @@ export default function LandingPage() {
       formData.append("roundType", roundType);
       if (roundType === "Coding") formData.append("language", codingLanguage);
       if (selectedBankId) formData.append("questionBankId", selectedBankId);
+      if (additionalContext.trim()) formData.append("additionalContext", additionalContext.trim());
       if (file) formData.append("resume", file);
 
       const res = await fetch("/api/create-interview", {
@@ -372,6 +374,23 @@ export default function LandingPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Additional Context */}
+              <div>
+                <label className="label">
+                  Additional Context <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={additionalContext}
+                  onChange={(e) => setAdditionalContext(e.target.value)}
+                  placeholder={"Examples:\n- Candidate scored 85% on our coding test, probe areas where they struggled (recursion, graphs)\n- Hiring manager wants to assess leadership potential\n- Ask about their experience with distributed systems\n- They claimed 5 years of React but resume shows only 2 projects\n- Previous round feedback: strong on coding, weak on system design"}
+                  rows={4}
+                  className="input-field resize-none"
+                />
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Add test scores, hiring manager notes, specific areas to probe, or any context the AI should consider during the interview.
+                </p>
               </div>
 
               {/* Submit */}
