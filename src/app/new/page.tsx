@@ -341,8 +341,28 @@ export default function NewInterviewPage() {
                     Additional Notes <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
                   <textarea value={additionalContext} onChange={(e) => setAdditionalContext(e.target.value)}
-                    placeholder="You can put anything here — the AI will use it during the interview:&#10;&#10;- Test scores: 'Scored 85%, weak on recursion and graphs'&#10;- Coding problem: 'Ask them to design an LRU cache. Expected: HashMap + DLL, O(1) get/put'&#10;- Custom prompt: 'Start with this scenario: You have a service handling 10K RPS...'&#10;- Hiring notes: 'Claims 5 yrs React but resume shows 2 projects — verify'&#10;- Previous round: 'Strong coding, weak system design — probe deeper'&#10;- Domain question: 'Ask about GDPR compliance for HR role'"
-                    rows={5} className="input-field resize-none" />
+                    placeholder={[
+                      "Add any context for the AI interviewer:",
+                      "",
+                      "Test scores:",
+                      "  Scored 85% on coding test, weak on recursion and graphs",
+                      "",
+                      "Coding problem to ask:",
+                      "  Design an LRU cache. Expected: HashMap + DLL, O(1) get/put",
+                      "",
+                      "Custom scenario:",
+                      "  Start with: You have a service handling 10K RPS that suddenly spikes to 50K...",
+                      "",
+                      "Hiring manager notes:",
+                      "  Claims 5 yrs React but resume shows only 2 projects — verify depth",
+                      "",
+                      "Previous round feedback:",
+                      "  Strong on coding, weak on system design — probe deeper",
+                      "",
+                      "Domain-specific:",
+                      "  Ask about GDPR compliance and data retention policies",
+                    ].join("\n")}
+                    rows={6} className="input-field resize-none" />
                 </div>
 
                 {/* Validation hint */}
