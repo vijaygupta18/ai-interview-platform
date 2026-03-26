@@ -42,6 +42,7 @@ COPY --from=builder /app/migrations ./migrations
 
 # Copy modules not included in standalone (dynamically required)
 COPY --from=builder /app/node_modules/pdf-parse ./node_modules/pdf-parse
+COPY --from=builder /app/node_modules/node-ensure ./node_modules/node-ensure
 
 # Create data directories
 RUN mkdir -p data/recordings data/proctoring && \
