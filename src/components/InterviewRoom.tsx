@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AudioRecorder } from "./AudioRecorder";
 import { ScreenShare } from "./ScreenShare";
+import Proctoring from "./Proctoring";
 
 interface TranscriptEntry {
   role: "ai" | "candidate";
@@ -1169,6 +1170,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           </div>
         </div>
       )}
+
+      {/* Proctoring — invisible monitoring component */}
+      <Proctoring
+        videoRef={videoRef as React.RefObject<HTMLVideoElement>}
+        interviewId={interviewId}
+        enabled={isStarted && !isEndingRef.current}
+        onAlert={onProctoringEvent}
+      />
 
       {/* End Confirmation Modal */}
       {showEndConfirm && (
