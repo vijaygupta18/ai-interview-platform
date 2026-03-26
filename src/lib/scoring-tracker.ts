@@ -1,52 +1,52 @@
-// In-memory tracker for scorecard generation status
-// Prevents duplicate scoring triggers and lets UI check status
+import { Pool } from "pg";
 
-interface ScoringStatus {
-  status: "generating" | "completed" | "failed";
-  startedAt: number;
-  completedAt?: number;
-  error?: string;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
+});
+
+export async function startScoring(interviewId: string): Promise<boolean> {
+  // Atomic check-and-set: only succeeds if not already generating
+  // Also allows retry if stuck in 'generating' for >5 minutes (server crash recovery)
+  const { rowCount } = await pool.query(
+    `UPDATE interviews SET scoring_status = 'generating', scoring_started_at = NOW()
+     WHERE id = $1 AND (
+       scoring_status IS NULL
+       OR scoring_status != 'generating'
+       OR scoring_started_at < NOW() - INTERVAL '5 minutes'
+     )`,
+    [interviewId]
+  );
+  return (rowCount ?? 0) > 0;
 }
 
-const scoringMap = new Map<string, ScoringStatus>();
+export async function completeScoring(interviewId: string): Promise<void> {
+  await pool.query(
+    "UPDATE interviews SET scoring_status = 'completed' WHERE id = $1",
+    [interviewId]
+  );
+}
 
-// Clean up old entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  scoringMap.forEach((entry, id) => {
-    if (now - entry.startedAt > 30 * 60 * 1000) {
-      scoringMap.delete(id);
-    }
-  });
-}, 10 * 60 * 1000);
+export async function failScoring(interviewId: string, error: string): Promise<void> {
+  await pool.query(
+    "UPDATE interviews SET scoring_status = 'failed' WHERE id = $1",
+    [interviewId]
+  );
+  console.error(`[Scoring] Failed for ${interviewId}: ${error}`);
+}
 
-export function startScoring(interviewId: string): boolean {
-  const existing = scoringMap.get(interviewId);
-  // Don't start if already generating
-  if (existing?.status === "generating") {
-    console.log(`[Scoring] Already generating for ${interviewId}, skipping`);
-    return false;
+export async function getScoringStatus(interviewId: string): Promise<{ status: string }> {
+  const { rows } = await pool.query(
+    "SELECT scoring_status, scoring_started_at, scorecard IS NOT NULL as has_scorecard FROM interviews WHERE id = $1",
+    [interviewId]
+  );
+  if (rows.length === 0) return { status: "not_found" };
+  if (rows[0].has_scorecard) return { status: "completed" };
+
+  // If stuck in generating for >5 min, treat as failed (server crash recovery)
+  if (rows[0].scoring_status === "generating" && rows[0].scoring_started_at) {
+    const elapsed = Date.now() - new Date(rows[0].scoring_started_at).getTime();
+    if (elapsed > 5 * 60 * 1000) return { status: "failed" };
   }
-  scoringMap.set(interviewId, { status: "generating", startedAt: Date.now() });
-  return true;
-}
 
-export function completeScoring(interviewId: string): void {
-  scoringMap.set(interviewId, {
-    status: "completed",
-    startedAt: scoringMap.get(interviewId)?.startedAt || Date.now(),
-    completedAt: Date.now(),
-  });
-}
-
-export function failScoring(interviewId: string, error: string): void {
-  scoringMap.set(interviewId, {
-    status: "failed",
-    startedAt: scoringMap.get(interviewId)?.startedAt || Date.now(),
-    error,
-  });
-}
-
-export function getScoringStatus(interviewId: string): ScoringStatus | null {
-  return scoringMap.get(interviewId) || null;
+  return { status: rows[0].scoring_status || "not_started" };
 }

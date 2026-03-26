@@ -37,13 +37,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
-    // Check if already being scored
-    const status = getScoringStatus(interviewId);
-    if (status?.status === "generating") {
+    // Check if already being scored (DB-backed, survives restarts)
+    const status = await getScoringStatus(interviewId);
+    if (status.status === "generating") {
       return NextResponse.json({ error: "Scorecard is already being generated", status: "generating" }, { status: 409 });
     }
 
-    if (!startScoring(interviewId)) {
+    if (!(await startScoring(interviewId))) {
       return NextResponse.json({ error: "Scoring already in progress" }, { status: 409 });
     }
 
@@ -76,11 +76,11 @@ export async function POST(req: Request) {
       endedAt: new Date().toISOString(),
     });
 
-    completeScoring(interviewId);
+    await completeScoring(interviewId);
     return NextResponse.json(scorecard);
   } catch (error) {
     const interviewId = (await req.clone().json().catch(() => ({}))).interviewId;
-    if (interviewId) failScoring(interviewId, (error as Error).message);
+    if (interviewId) await failScoring(interviewId, (error as Error).message);
     console.error("Scorecard generation error:", error);
     return NextResponse.json({ error: "Failed to generate scorecard" }, { status: 500 });
   }

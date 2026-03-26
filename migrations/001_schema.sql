@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS interviews (
 
     -- Results
     scorecard JSONB,
+    scoring_status VARCHAR(20),       -- NULL, generating, completed, failed
+    scoring_started_at TIMESTAMPTZ,
     recording_url TEXT
 );
 

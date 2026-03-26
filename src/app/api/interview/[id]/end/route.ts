@@ -37,7 +37,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
 async function generateScorecardInBackground(id: string, interview: any) {
   // Check if already being scored
-  if (!startScoring(id)) return;
+  if (!(await startScoring(id))) return;
 
   try {
     console.log(`[Auto-Score] Generating scorecard for interview ${id}...`);
