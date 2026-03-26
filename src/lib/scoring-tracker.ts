@@ -13,12 +13,11 @@ const scoringMap = new Map<string, ScoringStatus>();
 // Clean up old entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [id, entry] of scoringMap) {
-    // Remove entries older than 30 minutes
+  scoringMap.forEach((entry, id) => {
     if (now - entry.startedAt > 30 * 60 * 1000) {
       scoringMap.delete(id);
     }
-  }
+  });
 }, 10 * 60 * 1000);
 
 export function startScoring(interviewId: string): boolean {
