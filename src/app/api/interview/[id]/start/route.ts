@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
 import { updateInterview } from "@/lib/store";
 import { validateAccess } from "@/lib/auth-check";
+import { validateAccessPost } from "@/lib/auth-check";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
+  // Check URL token first, then try body token
   const { authorized } = await validateAccess(req, id);
   if (!authorized) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Try body token
+    try {
+      const body = await req.clone().json();
+      if (body.token && await validateAccessPost(id, body.token)) {
+        // OK
+      } else {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   await updateInterview(id, {
