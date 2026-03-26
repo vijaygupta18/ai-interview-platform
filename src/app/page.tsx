@@ -84,6 +84,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [verdictFilter, setVerdictFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -114,6 +115,16 @@ export default function DashboardPage() {
       result = result.filter((i) => i.status === statusFilter);
     }
 
+    if (verdictFilter !== "all") {
+      if (verdictFilter === "hire") {
+        result = result.filter((i) => i.scorecard?.recommendation && i.scorecard.recommendation.includes("hire") && !i.scorecard.recommendation.includes("no"));
+      } else if (verdictFilter === "no_hire") {
+        result = result.filter((i) => i.scorecard?.recommendation?.includes("no_hire") || i.scorecard?.recommendation?.includes("strong_no"));
+      } else if (verdictFilter === "unscored") {
+        result = result.filter((i) => !i.scorecard);
+      }
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -139,7 +150,7 @@ export default function DashboardPage() {
     });
 
     return result;
-  }, [interviews, statusFilter, search, sortField, sortDir]);
+  }, [interviews, statusFilter, verdictFilter, search, sortField, sortDir]);
 
   const stats = useMemo(() => {
     const scored = interviews.filter((i) => i.scorecard);
@@ -260,6 +271,27 @@ export default function DashboardPage() {
                 onClick={() => setStatusFilter(f.key)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   statusFilter === f.key
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {[
+              { key: "all", label: "All Verdicts" },
+              { key: "hire", label: "Hire" },
+              { key: "no_hire", label: "No Hire" },
+              { key: "unscored", label: "Unscored" },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setVerdictFilter(f.key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  verdictFilter === f.key
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
@@ -416,6 +448,9 @@ export default function DashboardPage() {
                         Score <SortIcon field="score" />
                       </th>
                       <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">
+                        Verdict
+                      </th>
+                      <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">
                         Proctoring
                       </th>
                       <th
@@ -458,6 +493,18 @@ export default function DashboardPage() {
                             {interview.scorecard ? (
                               <span className={`text-sm font-semibold ${scoreColor(interview.scorecard.overall)}`}>
                                 {interview.scorecard.overall}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {interview.scorecard?.recommendation ? (
+                              <span className={
+                                interview.scorecard.recommendation.includes("hire") && !interview.scorecard.recommendation.includes("no")
+                                  ? "badge-success" : "badge-danger"
+                              }>
+                                {interview.scorecard.recommendation.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
                               </span>
                             ) : (
                               <span className="text-sm text-gray-400">-</span>
