@@ -40,6 +40,9 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/migrations ./migrations
 
+# Copy modules not included in standalone (dynamically required)
+COPY --from=builder /app/node_modules/pdf-parse ./node_modules/pdf-parse
+
 # Create data directories
 RUN mkdir -p data/recordings data/proctoring && \
     chown -R node:node /app
