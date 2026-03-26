@@ -148,7 +148,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             if (violationRes.ok) {
               const { count } = await violationRes.json();
               setProctoringWarnings(count);
-              if (count >= 4) setShowProctoringBan(true);
+              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+              if (count >= maxStrikes) setShowProctoringBan(true);
             }
           } catch (err) {
             console.error("Failed to fetch violation count:", err);

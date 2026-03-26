@@ -234,7 +234,7 @@ async function getProctoringEventsWithPhotos(interviewId: string): Promise<Proct
 
 export async function getProctoringViolationCount(interviewId: string): Promise<number> {
   const { rows } = await pool.query(
-    "SELECT count(*) FROM proctoring_events WHERE interview_id = $1 AND type IN ('face_missing','multiple_faces','tab_switch','screen_share_stopped','phone_detected','eye_away') AND severity = 'flag'",
+    "SELECT count(*) FROM proctoring_events WHERE interview_id = $1 AND type IN ('face_missing','multiple_faces','tab_switch','screen_share_stopped','phone_detected','eye_away','fullscreen_exit','window_blur') AND severity = 'flag'",
     [interviewId]
   );
   return parseInt(rows[0].count);
