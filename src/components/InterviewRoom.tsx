@@ -607,8 +607,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }).catch(console.error);
 
       // Track serious violations — 3 strikes and you're out
-      const seriousTypes = ["face_missing", "multiple_faces", "tab_switch", "eye_away", "screen_share_stopped"];
-      if (seriousTypes.includes(event.type)) {
+      // Only "flag" severity counts — warnings and info don't
+      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected"];
+      if (strikeTypes.includes(event.type) && event.severity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + 1;
           if (next >= 3) {
