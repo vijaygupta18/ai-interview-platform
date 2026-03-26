@@ -419,20 +419,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     [interviewId, speakText]
   );
 
-  // Silence watchdog — if no activity for 30s, nudge AI to continue
+  // Silence watchdog — if no activity for 45s AND no interim speech, nudge AI
   useEffect(() => { lastActivityRef.current = Date.now(); }, [transcript]);
+  // Also reset on interim speech (candidate is actively talking)
+  useEffect(() => { if (interimTranscript) lastActivityRef.current = Date.now(); }, [interimTranscript]);
   useEffect(() => {
     if (!isStarted || isEndingRef.current) return;
     const watchdog = setInterval(() => {
       const silenceSec = (Date.now() - lastActivityRef.current) / 1000;
-      if (silenceSec > 30 && !isProcessingRef.current && !isAISpeaking) {
-        console.log("[Watchdog] 30s silence, nudging AI...");
+      // Only nudge if: 45s silence AND no interim speech AND AI not speaking AND not processing
+      if (silenceSec > 45 && !interimTranscript && !isProcessingRef.current && !isAISpeaking) {
+        console.log("[Watchdog] 45s silence, nudging AI...");
         getAIResponse([...transcript, { role: "candidate", text: "(candidate is waiting)", timestamp: Date.now() }]);
         lastActivityRef.current = Date.now();
       }
     }, 10000);
     return () => clearInterval(watchdog);
-  }, [isStarted, isAISpeaking, getAIResponse, transcript]);
+  }, [isStarted, isAISpeaking, interimTranscript, getAIResponse, transcript]);
 
   const startDeepgramSTT = useCallback(() => {
     const stream = mediaStreamRef.current;
