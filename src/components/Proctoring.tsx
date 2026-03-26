@@ -50,7 +50,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     if (!enabled) return;
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        alert("fullscreen_exit", "warning", "Candidate exited fullscreen mode");
+        alert("fullscreen_exit", "flag", "Candidate exited fullscreen mode");
         // Try to re-enter fullscreen
         setTimeout(() => {
           document.documentElement.requestFullscreen().catch(() => {});
@@ -154,7 +154,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
               const faceCenterX = face.boundingBox.x + face.boundingBox.width / 2;
               const offset = Math.abs(faceCenterX - video.videoWidth / 2);
               if (offset > video.videoWidth * 0.4) {
-                alert("eye_away", "warning", "Candidate appears to be looking away");
+                alert("eye_away", "flag", "Candidate appears to be looking away");
               }
             }
           }

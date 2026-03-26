@@ -641,7 +641,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     }
   }, []);
 
-  // Proctoring callback (for future integration)
+  // Proctoring callback — handles alerts from Proctoring.tsx and local events (e.g. screen_share_stopped)
   const onProctoringEvent = useCallback(
     (event: { type: string; message: string; severity?: string }) => {
       const alert: ProctoringAlert = {
@@ -652,10 +652,27 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       };
       setProctoringAlerts((prev) => [...prev, alert]);
 
-      // Track violations — 4 strikes and you're out
-      const strikeTypes = ["face_missing", "multiple_faces", "tab_switch", "screen_share_stopped", "phone_detected", "eye_away", "fullscreen_exit", "window_blur"]
-      // window_blur now covers: tab switch, app switch, focus lost (all as "flag" severity);
-      if (strikeTypes.includes(event.type)) {
+      // For events not originating from Proctoring.tsx (e.g. screen_share_stopped),
+      // persist to server so they appear in DB and getProctoringViolationCount
+      const localOnlyTypes = ["screen_share_stopped"];
+      if (localOnlyTypes.includes(event.type)) {
+        fetch("/api/proctor-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interviewId,
+            type: event.type,
+            severity: event.severity || "flag",
+            message: event.message,
+            token: tokenRef.current,
+          }),
+        }).catch(() => {});
+      }
+
+      // Track violations — only "flag" severity events count as strikes (consistent with server-side getProctoringViolationCount)
+      const strikeTypes = ["face_missing", "multiple_faces", "screen_share_stopped", "phone_detected", "eye_away", "fullscreen_exit", "window_blur"];
+      const effectiveSeverity = event.severity || "flag";
+      if (strikeTypes.includes(event.type) && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + 1;
           const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
@@ -669,7 +686,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     [interviewId]
   );
 
-  // Auto-end interview after 3 proctoring violations — give 10 seconds to read the message
+  // Auto-end interview after max proctoring violations — give 10 seconds to read the message
   useEffect(() => {
     if (!showProctoringBan || isEndingRef.current) return;
     const timer = setTimeout(() => {
@@ -912,7 +929,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                     screenStream.getVideoTracks()[0].onended = () => {
                       setScreenSharing(false);
                       if (isStarted) {
-                        onProctoringEvent({ type: "screen_share_stopped", message: "Candidate stopped screen sharing" });
+                        onProctoringEvent({ type: "screen_share_stopped", severity: "flag", message: "Candidate stopped screen sharing" });
                       }
                     };
                     setScreenSharing(true);
