@@ -160,7 +160,7 @@ export default function QuestionsPage() {
               <rect x="35" y="65" width="40" height="3" rx="1.5" fill="currentColor" opacity="0.4" />
               <rect x="35" y="75" width="50" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
               <rect x="35" y="85" width="30" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
-              <circle cx="85" cy="80" r="18" fill="#818cf8" opacity="0.1" stroke="#818cf8" strokeWidth="2" opacity="0.3" />
+              <circle cx="85" cy="80" r="18" fill="#818cf8" opacity="0.15" stroke="#818cf8" strokeWidth="2" />
               <path d="M82 80h6M85 77v6" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
             </svg>
             <p className="text-xl font-semibold text-gray-900 mb-2">No question banks yet</p>

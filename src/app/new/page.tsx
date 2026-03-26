@@ -134,15 +134,35 @@ export default function NewInterviewPage() {
 
         {interviewLink ? (
           /* ── Success State ──────────────────────────────────────── */
-          <div className="card p-8 text-center space-y-6 animate-scale-in">
-            <div className="w-16 h-16 mx-auto rounded-full bg-green-50 flex items-center justify-center">
-              <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+          <div className="card p-10 text-center space-y-6 animate-scale-in relative overflow-hidden">
+            {/* Subtle celebration dots */}
+            <div className="absolute inset-0 pointer-events-none">
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute rounded-full animate-fade-in"
+                  style={{
+                    width: `${3 + Math.random() * 4}px`,
+                    height: `${3 + Math.random() * 4}px`,
+                    left: `${15 + Math.random() * 70}%`,
+                    top: `${5 + Math.random() * 30}%`,
+                    backgroundColor: ["#818cf8", "#34d399", "#fbbf24"][i % 3],
+                    opacity: 0.3,
+                    animationDelay: `${i * 100}ms`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="relative">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-green-50 flex items-center justify-center">
+                <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-1">Interview Created</h2>
-              <p className="text-sm text-gray-500">Share this link with the candidate to begin</p>
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Interview Created</h2>
+              <p className="text-gray-500">Share this link with the candidate to begin the interview</p>
             </div>
             <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-3 border border-gray-200">
               <input readOnly value={interviewLink} className="flex-1 bg-transparent text-sm text-gray-700 outline-none truncate" />
@@ -266,11 +286,15 @@ export default function NewInterviewPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {FOCUS_AREAS.map((area) => (
                       <button key={area} type="button" onClick={() => toggleFocus(area)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
                           ${focusAreas.includes(area)
-                            ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
-                            : "bg-gray-50 text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700"}`}>
-                        {focusAreas.includes(area) && <span className="mr-1">&#10003;</span>}
+                            ? "bg-indigo-600 text-white shadow-sm shadow-indigo-200"
+                            : "bg-gray-50 text-gray-500 border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"}`}>
+                        {focusAreas.includes(area) && (
+                          <svg className="w-3 h-3 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
                         {area}
                       </button>
                     ))}
