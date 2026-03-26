@@ -135,7 +135,23 @@ CREATE TABLE IF NOT EXISTS question_banks (
 CREATE INDEX IF NOT EXISTS idx_question_banks_org ON question_banks(org_id);
 
 -- ============================================
--- 7. Interview Rounds (multi-round support)
+-- 7. Email Templates
+-- ============================================
+CREATE TABLE IF NOT EXISTS email_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    body TEXT NOT NULL,
+    description TEXT,
+    is_default BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_templates_org ON email_templates(org_id);
+
+-- ============================================
+-- 8. Interview Rounds (multi-round support)
 -- ============================================
 CREATE TABLE IF NOT EXISTS interview_rounds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
