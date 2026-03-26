@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS proctoring_events (
     id SERIAL PRIMARY KEY,
     interview_id UUID NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL,       -- face_missing, tab_switch, eye_away, multiple_faces, phone_detected, photo_capture, copy_paste, screen_share_stopped
+
     severity VARCHAR(20) NOT NULL,   -- flag, warning, info
     message TEXT NOT NULL,
     photo TEXT,                       -- base64 encoded JPEG for photo captures

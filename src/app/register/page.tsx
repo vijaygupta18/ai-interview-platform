@@ -217,7 +217,7 @@ export default function RegisterPage() {
               </button>
             </form>
 
-            <div className="mt-8 text-center">
+            <div className="mt-8 pt-6 border-t border-gray-100 text-center">
               <p className="text-sm text-gray-500">
                 Already have an account?{" "}
                 <Link href="/login" className="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">

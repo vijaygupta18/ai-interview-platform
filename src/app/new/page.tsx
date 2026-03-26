@@ -57,12 +57,24 @@ export default function NewInterviewPage() {
   const [copied, setCopied] = useState(false);
   const [questionBanks, setQuestionBanks] = useState<QuestionBank[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<string>("");
+  const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string; subject: string; description: string }[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/questions")
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setQuestionBanks(data); })
+      .catch(() => {});
+    fetch("/api/email-templates")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setEmailTemplates(data);
+          const def = data.find((t: any) => t.is_default);
+          if (def) setSelectedTemplateId(def.id);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -102,6 +114,7 @@ export default function NewInterviewPage() {
       if (roundType === "Coding") formData.append("language", codingLanguage);
       if (selectedBankId) formData.append("questionBankId", selectedBankId);
       if (additionalContext.trim()) formData.append("additionalContext", additionalContext.trim());
+      if (selectedTemplateId) formData.append("emailTemplateId", selectedTemplateId);
       if (file) formData.append("resume", file);
 
       const res = await fetch("/api/create-interview", { method: "POST", body: formData });
@@ -216,6 +229,25 @@ export default function NewInterviewPage() {
                   <input type="text" required value={role} onChange={(e) => setRole(e.target.value)}
                     placeholder="e.g. Senior SDET, HR Manager, Sales Lead" className="input-field" />
                 </div>
+
+                {/* Email Template */}
+                {emailTemplates.length > 0 && (
+                  <div>
+                    <label className="label">
+                      Email Template <span className="text-gray-400 font-normal">(sent with interview link)</span>
+                    </label>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                      className="input-field"
+                    >
+                      <option value="">Don't send email</option>
+                      {emailTemplates.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name} — {t.description}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Resume Upload */}
                 <div>

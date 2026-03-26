@@ -239,9 +239,9 @@ export default function QuestionsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
           <div
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-200"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
             onClick={() => setShowModal(false)}
           />
           <div className="relative w-full max-w-xl card p-0 max-h-[85vh] overflow-hidden animate-scale-in">

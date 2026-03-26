@@ -55,7 +55,7 @@ export default function CompletedPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-10 text-center animate-fade-in-up">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-lg shadow-gray-200/50 p-8 sm:p-10 text-center animate-fade-in-up">
           {/* Success checkmark with ring animation */}
           <div className="mx-auto mb-8 relative">
             <div className="flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-green-50 animate-scale-in" style={{ animationDelay: "200ms", opacity: 0 }}>

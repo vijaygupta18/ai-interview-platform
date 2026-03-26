@@ -56,6 +56,7 @@ export async function POST(req: Request) {
     const duration = parseInt(formData.get("duration") as string) || 30;
     const roundType = (formData.get("roundType") as string) || "General";
     const language = (formData.get("language") as string) || "";
+    const emailTemplateId = (formData.get("emailTemplateId") as string) || "";
     const additionalContext = (formData.get("additionalContext") as string) || "";
     const questionBankId = formData.get("questionBankId") as string;
 
@@ -154,7 +155,32 @@ export async function POST(req: Request) {
 
     const interviewUrl = `/interview/${id}?token=${token}`;
 
-    if (candidateEmail) {
+    if (candidateEmail && emailTemplateId) {
+      const fullUrl = `${req.headers.get("origin") || ""}${interviewUrl}`;
+      // Load custom template from DB
+      const { rows: tplRows } = await pool.query("SELECT subject, body FROM email_templates WHERE id = $1", [emailTemplateId]);
+      if (tplRows.length > 0) {
+        const tpl = tplRows[0];
+        const orgName = (session?.user as any)?.orgName || "InterviewAI";
+        const firstName = (candidateName || "").split(" ")[0] || "there";
+        // Replace template variables
+        const subject = tpl.subject
+          .replace(/\{\{role\}\}/g, role).replace(/\{\{orgName\}\}/g, orgName)
+          .replace(/\{\{candidateName\}\}/g, candidateName || "Candidate")
+          .replace(/\{\{firstName\}\}/g, firstName).replace(/\{\{level\}\}/g, level)
+          .replace(/\{\{duration\}\}/g, String(duration));
+        const bodyText = tpl.body
+          .replace(/\{\{role\}\}/g, role).replace(/\{\{orgName\}\}/g, orgName)
+          .replace(/\{\{candidateName\}\}/g, candidateName || "Candidate")
+          .replace(/\{\{firstName\}\}/g, firstName).replace(/\{\{level\}\}/g, level)
+          .replace(/\{\{duration\}\}/g, String(duration));
+        // Send using the template
+        const { sendCustomEmail } = await import("@/lib/email");
+        sendCustomEmail(candidateEmail, subject, bodyText, fullUrl, orgName).catch(console.error);
+      } else {
+        sendInterviewInvite(candidateEmail, candidateName || candidateEmail, fullUrl, role, duration).catch(console.error);
+      }
+    } else if (candidateEmail) {
       const fullUrl = `${req.headers.get("origin") || ""}${interviewUrl}`;
       sendInterviewInvite(candidateEmail, candidateName || candidateEmail, fullUrl, role, duration).catch(console.error);
     }

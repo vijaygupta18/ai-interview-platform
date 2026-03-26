@@ -120,3 +120,28 @@ export async function sendInterviewComplete(
 
   await sendMail(to, subject, html);
 }
+
+export async function sendCustomEmail(
+  to: string,
+  subject: string,
+  bodyText: string,
+  interviewUrl: string,
+  orgName: string
+) {
+  const bodyHtml = escapeHtml(bodyText).replace(/\n/g, "<br>");
+  const html = wrapHtml(`
+    <div style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 28px">
+      ${bodyHtml}
+    </div>
+    <div style="text-align:center;margin:0 0 24px">
+      <a href="${escapeHtml(interviewUrl)}" style="display:inline-block;background:#4f46e5;color:white;font-weight:600;font-size:15px;padding:14px 40px;border-radius:8px;text-decoration:none">
+        Start Interview
+      </a>
+    </div>
+    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">
+      This link is unique to you. Do not share it.
+    </p>
+  `);
+
+  await sendMail(to, subject, html);
+}
