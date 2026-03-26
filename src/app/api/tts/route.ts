@@ -96,7 +96,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "All TTS providers failed" }, { status: 502 });
     }
 
-    return new NextResponse(audioBuffer, {
+    return new NextResponse(new Uint8Array(audioBuffer), {
       headers: { "Content-Type": "audio/mpeg" },
     });
   } catch (error) {
