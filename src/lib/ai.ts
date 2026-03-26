@@ -83,14 +83,104 @@ function getDomainGuidance(role: string): string {
   return `You are interviewing for a technical role. Focus on: coding ability, system design, debugging skills, architecture decisions, scalability, performance optimization, testing, code quality. Probe for real production experience.`;
 }
 
+function getLevelCalibration(level: string): string {
+  switch (level.toLowerCase()) {
+    case "intern":
+    case "fresher":
+      return `LEVEL CALIBRATION (Intern/Fresher):
+- Ask basic conceptual questions, not production-scale problems
+- Focus on fundamentals, academic projects, learning ability
+- Be encouraging — don't grill them on things they haven't been exposed to
+- Ask "What did you learn from this?" more than "What would you do differently?"
+- Acceptable: textbook answers, enthusiasm, clear thinking process
+- Red flag: inability to explain basic concepts they claim to know`;
+
+    case "junior":
+      return `LEVEL CALIBRATION (Junior):
+- Ask practical coding/work questions at a moderate level
+- Expect 1-2 years of hands-on experience
+- They should know basics well but may lack depth on architecture
+- Ask about their contributions to team projects, not just solo work
+- Acceptable: some gaps in system design, strong fundamentals
+- Red flag: can't explain their own code or project decisions`;
+
+    case "mid":
+      return `LEVEL CALIBRATION (Mid-level):
+- Expect solid technical skills and ability to work independently
+- Should be able to design small-to-medium systems
+- Ask about tradeoffs, debugging approaches, code reviews
+- They should own features end-to-end
+- Acceptable: needs guidance on large-scale architecture
+- Red flag: can't debug independently, no ownership of shipped features`;
+
+    case "senior":
+      return `LEVEL CALIBRATION (Senior):
+- Expect deep expertise, strong system design, and mentorship ability
+- Should articulate complex tradeoffs clearly
+- Ask about scaling, failure modes, cross-team impact
+- They should have owned significant projects or systems
+- Push hard on "why" and "what went wrong" — seniors should handle pressure
+- Red flag: surface-level answers, can't explain architecture of systems they built`;
+
+    case "staff":
+    case "principal":
+      return `LEVEL CALIBRATION (Staff/Principal):
+- Expect company-wide technical impact and strategic thinking
+- Ask about architectural decisions that affected multiple teams
+- They should demonstrate technical vision and influence without authority
+- Probe: how did you convince others? What was the long-term impact?
+- Expect them to identify problems YOU haven't asked about
+- Red flag: only talks about individual contributions, no cross-org impact`;
+
+    case "manager":
+    case "director":
+      return `LEVEL CALIBRATION (Manager/Director):
+- Focus on leadership, team building, strategic thinking, and execution
+- Ask about hiring decisions, performance management, conflict resolution
+- They should demonstrate both technical credibility and people skills
+- Probe: how do you handle underperformers? How do you set team direction?
+- Expect data-driven decision making and stakeholder management
+- Red flag: micromanagement tendencies, can't delegate, no team growth stories`;
+
+    default:
+      return `LEVEL CALIBRATION: Adjust difficulty based on the candidate's experience as shown in their resume.`;
+  }
+}
+
+function extractCandidateName(resume: string): string {
+  if (!resume || resume.length < 10) return "";
+  // First line of resume is usually the name
+  const firstLine = resume.split("\n").find(l => l.trim().length > 0)?.trim() || "";
+  // Heuristic: if first line is 2-4 words, all capitalized or title case, it's likely a name
+  const words = firstLine.split(/\s+/);
+  if (words.length >= 1 && words.length <= 5 && !firstLine.includes("@") && !firstLine.includes("http") && !firstLine.includes(":")) {
+    return firstLine;
+  }
+  // Try to find name from email pattern
+  const emailMatch = resume.match(/([a-zA-Z]+(?:\.[a-zA-Z]+)?)@/);
+  if (emailMatch) {
+    return emailMatch[1].replace(/\./g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  }
+  return "";
+}
+
 function buildSystemPrompt(interview: Interview): string {
   const focusStr = interview.focusAreas.join(", ");
   const domainGuidance = getDomainGuidance(interview.role);
+  const levelCalibration = getLevelCalibration(interview.level);
   const minPerArea = Math.floor(interview.duration / (interview.focusAreas.length || 1));
+  const candidateName = extractCandidateName(interview.resume || "");
+  const nameInstruction = candidateName
+    ? `The candidate's name is ${candidateName}. Use their first name naturally in conversation (e.g., "That's interesting, ${candidateName.split(" ")[0]}" or "So ${candidateName.split(" ")[0]}, tell me about...").`
+    : `You don't know the candidate's name yet. In your opening, ask them to introduce themselves and then use their name naturally throughout.`;
 
   return `You are Alex, a senior interviewer conducting a ${interview.duration}-minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
 
+${nameInstruction}
+
 ${domainGuidance}
+
+${levelCalibration}
 
 OUTPUT RULES (strict):
 - Your entire output will be spoken aloud via text-to-speech
@@ -110,7 +200,6 @@ INTERVIEW STRATEGY:
 - Opening: greet warmly, introduce yourself as Alex, ask candidate to briefly introduce themselves
 - After intro: start with question bank questions (if provided), weave in resume-based questions
 - Follow-ups: if an answer is vague, dig deeper. Ask "Can you give me a specific example?" or "What was the outcome?"
-- Calibrate difficulty to ${interview.level} level
 - Pace: roughly ${minPerArea} min per focus area. Move on if candidate is clearly stuck after 2 attempts.
 - Last 2-3 minutes: ask if candidate has questions, then thank them professionally
 - React naturally before asking the next question ("That makes sense", "Interesting", "I see")`;
@@ -185,7 +274,14 @@ export async function generateScorecard(interview: Interview): Promise<string> {
     ? interview.proctoring.map((e) => `[${e.severity.toUpperCase()}] ${e.type}: ${e.message} at ${e.timestamp}`).join("\n")
     : "No proctoring issues detected.";
 
-  const scorecardPrompt = `You are a senior hiring manager evaluating an interview for a ${interview.level} ${interview.role} position. Focus areas were: ${interview.focusAreas.join(", ")}.
+  const levelBar = getLevelCalibration(interview.level);
+  const candidateName = extractCandidateName(interview.resume || "") || "the candidate";
+
+  const scorecardPrompt = `You are a senior hiring manager evaluating an interview for a ${interview.level} ${interview.role} position. Candidate: ${candidateName}. Focus areas: ${interview.focusAreas.join(", ")}.
+
+IMPORTANT: Score relative to the ${interview.level} level bar. A Senior engineer is judged differently than an Intern. An answer that's excellent for a Junior might be inadequate for a Staff engineer.
+
+${levelBar}
 
 SCORING RUBRIC:
 - 5 = Exceptional. Exceeds bar significantly. Would be a top performer.
