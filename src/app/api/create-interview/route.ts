@@ -10,7 +10,9 @@ import mammoth from "mammoth";
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    const pdfParse = require("pdf-parse");
+    // Use lib/pdf-parse.js directly to skip the buggy index.js
+    // (index.js has a debug mode that reads a test file on require())
+    const pdfParse = require("pdf-parse/lib/pdf-parse.js");
     const data = await pdfParse(buffer);
     const text = data.text?.trim() || "";
     console.log(`PDF parsed: ${text.length} chars`);
