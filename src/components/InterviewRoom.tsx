@@ -291,6 +291,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return `${m}:${s}`;
   };
 
+  // Combined AI + TTS: one request, returns audio with text in header
   const speakText = useCallback(async (text: string) => {
     setIsAISpeaking(true);
     setCurrentAIText(text);
@@ -333,19 +334,51 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true;
       try {
-        const res = await fetch("/api/ai-response", {
+        // Single combined endpoint: AI + TTS in one call
+        const res = await fetch("/api/ai-speak", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ interviewId, transcript: currentTranscript }),
         });
-        const { text } = await res.json();
-        const aiEntry: TranscriptEntry = {
-          role: "ai",
-          text,
-          timestamp: Date.now(),
-        };
-        setTranscript((prev) => [...prev, aiEntry]);
-        await speakText(text);
+
+        const contentType = res.headers.get("Content-Type") || "";
+
+        if (contentType.includes("audio")) {
+          // Got audio response — text is in header
+          const aiText = decodeURIComponent(res.headers.get("X-AI-Text") || "");
+          const aiEntry: TranscriptEntry = { role: "ai", text: aiText, timestamp: Date.now() };
+          setTranscript((prev) => [...prev, aiEntry]);
+
+          // Play audio immediately using streaming blob
+          setIsAISpeaking(true);
+          setCurrentAIText(aiText);
+          const audioBlob = await res.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+          await new Promise<void>((resolve, reject) => {
+            audio.onended = () => {
+              setIsAISpeaking(false);
+              setCurrentAIText("");
+              currentAudioRef.current = null;
+              URL.revokeObjectURL(audioUrl);
+              resolve();
+            };
+            audio.onerror = (e) => {
+              setIsAISpeaking(false);
+              setCurrentAIText("");
+              URL.revokeObjectURL(audioUrl);
+              reject(e);
+            };
+            audio.play().catch(reject);
+          });
+        } else {
+          // JSON fallback (no audio)
+          const { text } = await res.json();
+          const aiEntry: TranscriptEntry = { role: "ai", text, timestamp: Date.now() };
+          setTranscript((prev) => [...prev, aiEntry]);
+          await speakText(text);
+        }
       } catch (err) {
         console.error("AI response failed:", err);
       } finally {
@@ -436,10 +469,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
           if (speechFinal) {
             // Speech ended — trigger after short delay
-            silenceTimerRef.current = setTimeout(triggerAI, 500);
+            silenceTimerRef.current = setTimeout(triggerAI, 200);
           } else {
             // Not speech_final yet — use longer timeout as fallback
-            silenceTimerRef.current = setTimeout(triggerAI, 2500);
+            silenceTimerRef.current = setTimeout(triggerAI, 1500);
           }
         } else if (!isFinal && text) {
           setInterimTranscript(text);

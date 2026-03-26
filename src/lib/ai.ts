@@ -106,7 +106,7 @@ export async function getAIResponse(
     messages.push({ role: "user", content: "Start the interview now." });
   }
 
-  return callJuspayAI(messages, 1000, 0.7);
+  return callJuspayAI(messages, 600, 0.7);
 }
 
 export async function generateScorecard(interview: Interview): Promise<string> {
