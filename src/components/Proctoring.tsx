@@ -147,7 +147,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert }: 
     return () => clearInterval(interval);
   }, [enabled, videoRef, alert]);
 
-  // Periodic photo capture — every 30s
+  // Periodic photo capture — every 60s
   useEffect(() => {
     if (!enabled) return;
     const capture = () => {
@@ -167,8 +167,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert }: 
         body: JSON.stringify({ interviewId, type: "photo_capture", severity: "info", message: `Photo #${photoCountRef.current}`, photo: dataUrl }),
       }).catch(() => {});
     };
-    const first = setTimeout(capture, 15000);
-    const interval = setInterval(capture, 30000);
+    const first = setTimeout(capture, 30000);
+    const interval = setInterval(capture, 60000);
     return () => { clearTimeout(first); clearInterval(interval); };
   }, [enabled, videoRef, interviewId]);
 
