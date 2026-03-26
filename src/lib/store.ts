@@ -5,6 +5,8 @@ export interface Interview {
   resume: string;
   resumeFileName: string;
   candidateEmail: string;
+  candidateName?: string;
+  candidatePhone?: string;
   token: string;
   browserFingerprint: string | null;
   role: string;
@@ -51,8 +53,8 @@ export interface Scorecard {
 
 export async function saveInterview(interview: Omit<Interview, "transcript" | "proctoring">): Promise<void> {
   await pool.query(
-    `INSERT INTO interviews (id, resume, resume_file_name, candidate_email, token, browser_fingerprint, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at, org_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+    `INSERT INTO interviews (id, resume, resume_file_name, candidate_email, candidate_name, candidate_phone, token, browser_fingerprint, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at, org_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
      ON CONFLICT (id) DO UPDATE SET
        status = EXCLUDED.status,
        scorecard = EXCLUDED.scorecard,
@@ -64,6 +66,8 @@ export async function saveInterview(interview: Omit<Interview, "transcript" | "p
       interview.resume,
       interview.resumeFileName,
       interview.candidateEmail,
+      interview.candidateName || null,
+      interview.candidatePhone || null,
       interview.token,
       interview.browserFingerprint,
       interview.role,
@@ -96,6 +100,8 @@ export async function getInterview(id: string): Promise<Interview | null> {
     resume: row.resume,
     resumeFileName: row.resume_file_name,
     candidateEmail: row.candidate_email || "",
+    candidateName: row.candidate_name || "",
+    candidatePhone: row.candidate_phone || "",
     token: row.token || "",
     browserFingerprint: row.browser_fingerprint || null,
     role: row.role,
@@ -219,6 +225,8 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
     resume: "",
     resumeFileName: row.resume_file_name,
     candidateEmail: row.candidate_email || "",
+    candidateName: row.candidate_name || "",
+    candidatePhone: row.candidate_phone || "",
     token: "",
     browserFingerprint: null,
     role: row.role,

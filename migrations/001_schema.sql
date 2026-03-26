@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS interviews (
 
     -- Candidate info
     candidate_email VARCHAR(255),
+    candidate_name VARCHAR(255),
+    candidate_phone VARCHAR(50),
     resume TEXT,
     resume_file_name VARCHAR(255),
 

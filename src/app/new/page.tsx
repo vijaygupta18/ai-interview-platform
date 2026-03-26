@@ -41,6 +41,8 @@ function SectionHeader({ step, title, subtitle }: { step: number; title: string;
 export default function NewInterviewPage() {
   const { data: session } = useSession();
   const [email, setEmail] = useState("");
+  const [candidateName, setCandidateName] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState("");
   const [level, setLevel] = useState("Senior");
   const [duration, setDuration] = useState(30);
@@ -90,6 +92,8 @@ export default function NewInterviewPage() {
     try {
       const formData = new FormData();
       formData.append("candidateEmail", email);
+      if (candidateName.trim()) formData.append("candidateName", candidateName.trim());
+      if (phone.trim()) formData.append("candidatePhone", phone.trim());
       formData.append("role", role);
       formData.append("level", level);
       formData.append("duration", String(duration));
@@ -190,17 +194,27 @@ export default function NewInterviewPage() {
             <div className="card p-6 animate-fade-in-up border-l-4 border-l-indigo-500">
               <SectionHeader step={1} title="Candidate Information" subtitle="Who are you interviewing?" />
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="label">Candidate Email <span className="text-red-400">*</span></label>
                     <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                       placeholder="candidate@example.com" className="input-field" />
                   </div>
                   <div>
-                    <label className="label">Role <span className="text-red-400">*</span></label>
-                    <input type="text" required value={role} onChange={(e) => setRole(e.target.value)}
-                      placeholder="e.g. Senior SDET, HR Manager, Sales Lead" className="input-field" />
+                    <label className="label">Candidate Name <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="text" value={candidateName} onChange={(e) => setCandidateName(e.target.value)}
+                      placeholder="e.g. Vijay Gupta" className="input-field" />
                   </div>
+                  <div>
+                    <label className="label">Phone <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210" className="input-field" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Role <span className="text-red-400">*</span></label>
+                  <input type="text" required value={role} onChange={(e) => setRole(e.target.value)}
+                    placeholder="e.g. Senior SDET, HR Manager, Sales Lead" className="input-field" />
                 </div>
 
                 {/* Resume Upload */}

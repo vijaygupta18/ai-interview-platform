@@ -50,6 +50,8 @@ export async function POST(req: Request) {
     const role = formData.get("role") as string;
     const level = formData.get("level") as string;
     const candidateEmail = formData.get("candidateEmail") as string;
+    const candidateName = (formData.get("candidateName") as string) || "";
+    const candidatePhone = (formData.get("candidatePhone") as string) || "";
     const focusAreas = (formData.get("focusAreas") as string)?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
     const duration = parseInt(formData.get("duration") as string) || 30;
     const roundType = (formData.get("roundType") as string) || "General";
@@ -127,6 +129,8 @@ export async function POST(req: Request) {
       resume: resumeText,
       resumeFileName,
       candidateEmail: candidateEmail || "",
+      candidateName: candidateName || "",
+      candidatePhone: candidatePhone || "",
       token,
       browserFingerprint: null,
       role,
@@ -152,7 +156,7 @@ export async function POST(req: Request) {
 
     if (candidateEmail) {
       const fullUrl = `${req.headers.get("origin") || ""}${interviewUrl}`;
-      sendInterviewInvite(candidateEmail, candidateEmail, fullUrl, role, duration).catch(console.error);
+      sendInterviewInvite(candidateEmail, candidateName || candidateEmail, fullUrl, role, duration).catch(console.error);
     }
 
     return NextResponse.json({ id, token, url: interviewUrl, candidateEmail });

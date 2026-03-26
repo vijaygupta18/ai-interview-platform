@@ -169,7 +169,7 @@ function buildSystemPrompt(interview: Interview): string {
   const domainGuidance = getDomainGuidance(interview.role);
   const levelCalibration = getLevelCalibration(interview.level);
   const minPerArea = Math.floor(interview.duration / (interview.focusAreas.length || 1));
-  const candidateName = extractCandidateName(interview.resume || "");
+  const candidateName = (interview as any).candidateName || extractCandidateName(interview.resume || "");
   const nameInstruction = candidateName
     ? `The candidate's name is ${candidateName}. Use their first name naturally in conversation (e.g., "That's interesting, ${candidateName.split(" ")[0]}" or "So ${candidateName.split(" ")[0]}, tell me about...").`
     : `You don't know the candidate's name yet. In your opening, ask them to introduce themselves and then use their name naturally throughout.`;
