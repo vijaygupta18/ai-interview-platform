@@ -45,6 +45,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [currentAIText, setCurrentAIText] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
+  const [proctoringWarnings, setProctoringWarnings] = useState(0);
+  const [showProctoringBan, setShowProctoringBan] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isEnding, setIsEnding] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
@@ -572,7 +574,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   // Proctoring callback (for future integration)
   const onProctoringEvent = useCallback(
-    (event: { type: string; message: string }) => {
+    (event: { type: string; message: string; severity?: string }) => {
       const alert: ProctoringAlert = {
         id: crypto.randomUUID(),
         type: event.type,
@@ -583,11 +585,38 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       fetch("/api/proctor-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interviewId, event }),
+        body: JSON.stringify({ interviewId, type: event.type, severity: event.severity || "warning", message: event.message }),
       }).catch(console.error);
+
+      // Track serious violations — 3 strikes and you're out
+      const seriousTypes = ["face_missing", "multiple_faces", "tab_switch", "eye_away", "screen_share_stopped"];
+      if (seriousTypes.includes(event.type)) {
+        setProctoringWarnings((prev) => {
+          const next = prev + 1;
+          if (next >= 3) {
+            setShowProctoringBan(true);
+          }
+          return next;
+        });
+      }
     },
     [interviewId]
   );
+
+  // Auto-end interview after 3 proctoring violations — give 10 seconds to read the message
+  useEffect(() => {
+    if (!showProctoringBan || isEndingRef.current) return;
+    const timer = setTimeout(() => {
+      // End interview
+      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+      dgSocketRef.current?.close();
+      if (timerRef.current) clearInterval(timerRef.current);
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      fetch(`/api/interview/${interviewId}/end`, { method: "POST" }).catch(console.error);
+      window.location.href = `/completed/${interviewId}`;
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [showProctoringBan, interviewId]);
 
   if (isLoading) {
     return (
@@ -1014,18 +1043,71 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         </button>
       </div>
 
-      {/* Proctoring Alerts */}
+      {/* Proctoring Warning Counter */}
+      {proctoringWarnings > 0 && !showProctoringBan && (
+        <div className="fixed left-1/2 -translate-x-1/2 top-16 z-50">
+          <div className={`flex items-center gap-3 rounded-xl px-5 py-3 shadow-lg border ${
+            proctoringWarnings >= 2
+              ? "bg-red-900/90 border-red-500/40 backdrop-blur"
+              : "bg-yellow-900/90 border-yellow-500/30 backdrop-blur"
+          }`}>
+            <div className="flex gap-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
+                  i <= proctoringWarnings
+                    ? "bg-red-500 border-red-400 scale-110"
+                    : "bg-transparent border-zinc-600"
+                }`} />
+              ))}
+            </div>
+            <span className={`text-sm font-medium ${proctoringWarnings >= 2 ? "text-red-200" : "text-yellow-200"}`}>
+              Warning {proctoringWarnings}/3 — {proctoringWarnings >= 2 ? "Next violation will end the interview" : "Please look at the screen and stay focused"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Proctoring Alerts (toast) */}
       <div className="fixed right-4 top-16 z-50 flex flex-col gap-2">
         {proctoringAlerts.map((alert) => (
           <div
             key={alert.id}
-            className="glass animate-in slide-in-from-right flex items-center gap-2 rounded-lg border border-yellow-500/20 px-4 py-2"
+            className="glass flex items-center gap-2 rounded-lg border border-yellow-500/20 px-4 py-2"
+            style={{ animation: "fadeInRight 0.3s ease-out" }}
           >
             <span className="text-yellow-400">&#9888;</span>
             <span className="text-sm text-yellow-200">{alert.message}</span>
           </div>
         ))}
       </div>
+
+      {/* Proctoring Ban Modal — 3 strikes */}
+      {showProctoringBan && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="glass w-full max-w-md rounded-2xl p-8 text-center border border-red-500/30">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-8 w-8 text-red-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Interview Terminated</h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              Your interview has been ended due to multiple integrity violations. Our proctoring system detected that you were:
+            </p>
+            <ul className="text-left text-sm text-zinc-400 space-y-1.5 mb-6 px-4">
+              <li className="flex items-center gap-2"><span className="text-red-400">&#10005;</span> Not looking at the screen</li>
+              <li className="flex items-center gap-2"><span className="text-red-400">&#10005;</span> Switching tabs or windows</li>
+              <li className="flex items-center gap-2"><span className="text-red-400">&#10005;</span> Using unauthorized assistance</li>
+            </ul>
+            <p className="text-xs text-zinc-500">
+              This incident has been recorded. You will be redirected in a few seconds.
+            </p>
+            <div className="mt-4 h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full" style={{ animation: "shrinkBar 10s linear forwards" }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* End Confirmation Modal */}
       {showEndConfirm && (

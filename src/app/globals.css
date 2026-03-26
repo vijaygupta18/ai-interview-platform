@@ -130,6 +130,12 @@ body {
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
+/* Proctoring ban countdown bar */
+@keyframes shrinkBar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
 /* AI Avatar animations */
 @keyframes aiFloat {
   0%, 100% { transform: translateY(0px) rotateY(0deg); }
