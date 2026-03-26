@@ -81,6 +81,7 @@ function SkeletonCard({ className = "" }: { className?: string }) {
 export default function InterviewDetailPage({ params }: { params: { id: string } }) {
   const [interview, setInterview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [scoringStatus, setScoringStatus] = useState<string>("unknown");
 
   useEffect(() => {
     fetch(`/api/interview/${params.id}`)
@@ -105,6 +106,25 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  // Poll scoring status if no scorecard yet
+  useEffect(() => {
+    if (!interview || interview.scorecard) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/scoring-status/${params.id}`);
+        const data = await res.json();
+        setScoringStatus(data.status);
+        if (data.status === "completed") {
+          // Reload to get the scorecard
+          window.location.reload();
+        }
+      } catch {}
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [interview, params.id]);
 
   if (loading) {
     return (
@@ -216,41 +236,72 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Scorecard + Transcript */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Generate Scorecard CTA */}
+            {/* Scorecard Status */}
             {!interview.scorecard && interview.transcript.length > 0 && (
               <div className="card p-6 text-center animate-fade-in-up delay-1">
-                <p className="text-gray-500 mb-4">No scorecard generated yet.</p>
-                <button
-                  id="rescore-btn"
-                  onClick={async () => {
-                    const btn = document.getElementById("rescore-btn") as HTMLButtonElement;
-                    btn.disabled = true;
-                    btn.textContent = "Generating scorecard...";
-                    try {
-                      const res = await fetch("/api/scorecard", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ interviewId: interview.id }),
-                      });
-                      if (res.ok) {
-                        btn.textContent = "Done! Reloading...";
-                        setTimeout(() => window.location.reload(), 1000);
-                      } else {
-                        btn.textContent = "Failed — Try Again";
-                        btn.disabled = false;
-                      }
-                    } catch {
-                      btn.textContent = "Failed — Try Again";
-                      btn.disabled = false;
-                    }
-                  }}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Generate Scorecard
-                </button>
+                {scoringStatus === "generating" ? (
+                  <>
+                    <div className="flex items-center justify-center gap-3 mb-3">
+                      <svg className="w-5 h-5 text-indigo-600 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                        <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+                      </svg>
+                      <span className="text-sm font-medium text-indigo-600">AI is analyzing the interview...</span>
+                    </div>
+                    <p className="text-xs text-gray-400">Scorecard will appear automatically when ready. Checking every 5 seconds.</p>
+                  </>
+                ) : scoringStatus === "failed" ? (
+                  <>
+                    <p className="text-sm text-red-600 mb-3">Scorecard generation failed. You can retry.</p>
+                    <button
+                      onClick={async (e) => {
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        btn.textContent = "Generating...";
+                        try {
+                          const res = await fetch("/api/scorecard", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ interviewId: interview.id }),
+                          });
+                          if (res.ok) setTimeout(() => window.location.reload(), 1000);
+                          else { btn.textContent = "Failed — Try Again"; btn.disabled = false; }
+                        } catch { btn.textContent = "Failed — Try Again"; btn.disabled = false; }
+                      }}
+                      className="btn-primary inline-flex items-center gap-2"
+                    >
+                      Retry Scoring
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-500 mb-4">No scorecard generated yet.</p>
+                    <button
+                      onClick={async (e) => {
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        btn.textContent = "Generating...";
+                        setScoringStatus("generating");
+                        try {
+                          const res = await fetch("/api/scorecard", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ interviewId: interview.id }),
+                          });
+                          if (res.ok) setTimeout(() => window.location.reload(), 1000);
+                          else if (res.status === 409) setScoringStatus("generating");
+                          else { btn.textContent = "Failed — Try Again"; btn.disabled = false; setScoringStatus("failed"); }
+                        } catch { btn.textContent = "Failed — Try Again"; btn.disabled = false; setScoringStatus("failed"); }
+                      }}
+                      className="btn-primary inline-flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Generate Scorecard
+                    </button>
+                  </>
+                )}
               </div>
             )}
 

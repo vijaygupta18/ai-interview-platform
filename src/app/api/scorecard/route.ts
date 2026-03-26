@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getInterview, updateInterview } from "@/lib/store";
 import { generateScorecard } from "@/lib/ai";
+import { startScoring, completeScoring, failScoring, getScoringStatus } from "@/lib/scoring-tracker";
 
 function normalizeScorecard(raw: any) {
   // Transform AI output into the format the review page expects
@@ -36,8 +37,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
+    // Check if already being scored
+    const status = getScoringStatus(interviewId);
+    if (status?.status === "generating") {
+      return NextResponse.json({ error: "Scorecard is already being generated", status: "generating" }, { status: 409 });
+    }
+
+    if (!startScoring(interviewId)) {
+      return NextResponse.json({ error: "Scoring already in progress" }, { status: 409 });
+    }
+
     const interview = await getInterview(interviewId);
     if (!interview) {
+      failScoring(interviewId, "Interview not found");
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
     }
 
@@ -64,8 +76,11 @@ export async function POST(req: Request) {
       endedAt: new Date().toISOString(),
     });
 
+    completeScoring(interviewId);
     return NextResponse.json(scorecard);
   } catch (error) {
+    const interviewId = (await req.clone().json().catch(() => ({}))).interviewId;
+    if (interviewId) failScoring(interviewId, (error as Error).message);
     console.error("Scorecard generation error:", error);
     return NextResponse.json({ error: "Failed to generate scorecard" }, { status: 500 });
   }

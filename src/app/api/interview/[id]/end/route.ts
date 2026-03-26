@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getInterview, updateInterview } from "@/lib/store";
 import { generateScorecard } from "@/lib/ai";
+import { startScoring, completeScoring, failScoring } from "@/lib/scoring-tracker";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,8 +20,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   // Return immediately — candidate doesn't wait
   const response = NextResponse.json({ ok: true });
 
-  // Auto-generate scorecard in background after a short delay
-  // Delay ensures all transcript entries are saved (they're fire-and-forget)
+  // Auto-generate scorecard in background after 3s delay
   setTimeout(async () => {
     try {
       const freshInterview = await getInterview(id);
@@ -36,6 +36,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 }
 
 async function generateScorecardInBackground(id: string, interview: any) {
+  // Check if already being scored
+  if (!startScoring(id)) return;
+
   try {
     console.log(`[Auto-Score] Generating scorecard for interview ${id}...`);
     const scorecardRaw = await generateScorecard(interview);
@@ -49,7 +52,6 @@ async function generateScorecardInBackground(id: string, interview: any) {
       else throw new Error("Could not parse scorecard JSON");
     }
 
-    // Normalize to expected format
     const scorecard = {
       scores: [
         { dimension: "Technical Depth", score: parsed.technicalDepth ?? parsed.technical_depth ?? 3 },
@@ -72,8 +74,10 @@ async function generateScorecardInBackground(id: string, interview: any) {
     };
 
     await updateInterview(id, { scorecard });
+    completeScoring(id);
     console.log(`[Auto-Score] Scorecard saved for interview ${id}`);
   } catch (err) {
+    failScoring(id, (err as Error).message);
     console.error(`[Auto-Score] Failed for interview ${id}:`, err);
   }
 }
