@@ -50,28 +50,47 @@ export async function POST(req: Request) {
       timestamp: new Date().toISOString(),
     });
 
-    // Generate TTS audio
-    const apiKey = process.env.DEEPGRAM_API_KEY;
-    if (!apiKey) {
-      // Return text only if no TTS
-      return NextResponse.json({ text: aiText, audio: false });
+    // Generate TTS audio using the same logic as /api/tts
+    const { stripThinking } = await import("@/lib/ai");
+    const cleanedText = stripThinking(aiText);
+
+    let audioBuffer: ArrayBuffer | null = null;
+    const provider = process.env.TTS_PROVIDER || "deepgram";
+
+    // Try Edge TTS first if configured
+    if (provider === "edge") {
+      try {
+        const { execFileSync } = await import("child_process");
+        const fs = await import("fs");
+        const path = await import("path");
+        const tmpFile = path.join("/tmp", `_tts_${Date.now()}.mp3`);
+        const voice = process.env.EDGE_TTS_VOICE || "en-IN-NeerjaNeural";
+        const rate = process.env.EDGE_TTS_RATE || "+10%";
+        execFileSync("edge-tts", ["--voice", voice, "--rate", rate, "--pitch", "-2Hz", "--text", cleanedText, "--write-media", tmpFile], { timeout: 15000, stdio: "pipe" });
+        const buf = fs.readFileSync(tmpFile);
+        fs.unlinkSync(tmpFile);
+        audioBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      } catch (err) {
+        console.warn("Edge TTS failed in ai-speak:", (err as Error).message);
+      }
     }
 
-    const ttsRes = await fetch("https://api.deepgram.com/v1/speak?model=aura-angus-en", {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: aiText }),
-    });
-
-    if (!ttsRes.ok) {
-      console.error("TTS failed, returning text only");
-      return NextResponse.json({ text: aiText, audio: false });
+    // Fallback to Deepgram
+    if (!audioBuffer) {
+      const apiKey = process.env.DEEPGRAM_API_KEY;
+      if (apiKey) {
+        const ttsRes = await fetch("https://api.deepgram.com/v1/speak?model=aura-angus-en", {
+          method: "POST",
+          headers: { Authorization: `Token ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ text: cleanedText }),
+        });
+        if (ttsRes.ok) audioBuffer = await ttsRes.arrayBuffer();
+      }
     }
 
-    const audioBuffer = await ttsRes.arrayBuffer();
+    if (!audioBuffer) {
+      return NextResponse.json({ text: aiText, audio: false });
+    }
 
     // Return both text and audio in one response
     // Text in header, audio in body
