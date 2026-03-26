@@ -31,6 +31,14 @@
 
 ---
 
+## How It Works — Animated
+
+<p align="center">
+  <img src="docs/flow.svg" alt="InterviewAI Flow" width="100%" />
+</p>
+
+---
+
 ## Features at a Glance
 
 <table>
