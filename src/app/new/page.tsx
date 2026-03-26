@@ -167,7 +167,7 @@ export default function NewInterviewPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Section 1: Candidate Info */}
-            <div className="card p-6 animate-fade-in-up">
+            <div className="card p-6 animate-fade-in-up border-l-4 border-l-indigo-500">
               <SectionHeader step={1} title="Candidate Information" subtitle="Who are you interviewing?" />
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -193,28 +193,33 @@ export default function NewInterviewPage() {
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200
-                      ${isDragging ? "border-indigo-400 bg-indigo-50 scale-[1.01]"
-                        : file ? "border-green-300 bg-green-50"
-                        : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"}`}
+                    className={`border-2 border-dashed rounded-xl text-center cursor-pointer transition-all duration-300
+                      ${isDragging ? "border-indigo-400 bg-indigo-50 scale-[1.02] shadow-lg shadow-indigo-100"
+                        : file ? "border-green-300 bg-green-50 p-4"
+                        : "border-gray-300 hover:border-indigo-300 hover:bg-indigo-50/30 p-6"}`}
                   >
                     <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden"
                       onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     {file ? (
-                      <div className="flex items-center justify-center gap-2 text-green-700">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
+                      <div className="flex items-center justify-center gap-3 text-green-700">
+                        <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
                         <span className="text-sm font-medium">{file.name}</span>
                         <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                          className="ml-1 text-xs text-gray-400 hover:text-red-500">&times;</button>
+                          className="ml-1 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition">&times;</button>
                       </div>
                     ) : (
                       <div className="py-2">
-                        <svg className="w-6 h-6 mx-auto text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p className="text-xs text-gray-500">Drop resume or <span className="text-indigo-600 font-medium">browse</span> &middot; PDF, DOC, TXT</p>
+                        <div className="w-12 h-12 mx-auto rounded-xl bg-gray-100 flex items-center justify-center mb-3">
+                          <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">Drop resume here or <span className="text-indigo-600 font-medium">browse files</span></p>
+                        <p className="text-xs text-gray-400">Supports PDF, DOC, DOCX, TXT</p>
                       </div>
                     )}
                   </div>
@@ -223,7 +228,7 @@ export default function NewInterviewPage() {
             </div>
 
             {/* Section 2: Interview Settings */}
-            <div className="card p-6 animate-fade-in-up delay-1">
+            <div className="card p-6 animate-fade-in-up delay-1 border-l-4 border-l-purple-500">
               <SectionHeader step={2} title="Interview Settings" subtitle="Configure the interview format" />
               <div className="space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -275,7 +280,7 @@ export default function NewInterviewPage() {
             </div>
 
             {/* Section 3: Context & Questions */}
-            <div className="card p-6 animate-fade-in-up delay-2">
+            <div className="card p-6 animate-fade-in-up delay-2 border-l-4 border-l-emerald-500">
               <SectionHeader step={3} title="Interview Context" subtitle="Provide context so the AI asks better questions. At least one of resume, context, or question bank is required." />
               <div className="space-y-4">
                 {/* Question Bank */}

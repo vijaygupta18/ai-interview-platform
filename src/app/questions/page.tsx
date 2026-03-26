@@ -241,13 +241,19 @@ export default function QuestionsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/20 transition-opacity duration-200"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-200"
             onClick={() => setShowModal(false)}
           />
-          <div className="relative w-full max-w-xl card p-6 max-h-[85vh] overflow-y-auto animate-scale-in">
-            <h2 className="text-lg font-bold text-gray-900 mb-5">
-              {editingBank ? "Edit Question Bank" : "Create Question Bank"}
-            </h2>
+          <div className="relative w-full max-w-xl card p-0 max-h-[85vh] overflow-hidden animate-scale-in">
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">
+                {editingBank ? "Edit Question Bank" : "Create Question Bank"}
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {editingBank ? "Update your question bank details" : "Build a reusable set of interview questions"}
+              </p>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto" style={{ maxHeight: "calc(85vh - 140px)" }}>
 
             <div className="space-y-4">
               <div>
@@ -343,7 +349,8 @@ export default function QuestionsPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
               <button
                 onClick={() => setShowModal(false)}
                 className="btn-secondary"

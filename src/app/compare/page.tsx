@@ -252,7 +252,10 @@ export default function ComparePage() {
                         <span className="text-2xl font-bold text-gray-900">{sc.overall}</span>
                         <span className="text-sm text-gray-500">/5</span>
                         {isBest && (
-                          <span className="ml-auto badge-success !text-[10px]">TOP</span>
+                          <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z" /></svg>
+                            BEST
+                          </span>
                         )}
                       </div>
                       <Badge recommendation={sc.recommendation} />
