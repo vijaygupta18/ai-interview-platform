@@ -54,9 +54,30 @@ async function generateScorecardInBackground(id: string, interview: any) {
     try {
       parsed = JSON.parse(scorecardRaw);
     } catch {
+      // Try to extract JSON from response
       const jsonMatch = scorecardRaw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-      else throw new Error("Could not parse scorecard JSON");
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Try fixing common JSON issues: trailing commas, truncated arrays
+          let fixed = jsonMatch[0]
+            .replace(/,\s*}/g, "}")     // trailing comma before }
+            .replace(/,\s*]/g, "]")     // trailing comma before ]
+            .replace(/\.\.\./g, "")     // literal ...
+            .replace(/,\s*$/, "");      // trailing comma at end
+          // If JSON is truncated, try to close it
+          const openBraces = (fixed.match(/{/g) || []).length;
+          const closeBraces = (fixed.match(/}/g) || []).length;
+          const openBrackets = (fixed.match(/\[/g) || []).length;
+          const closeBrackets = (fixed.match(/]/g) || []).length;
+          for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += "]";
+          for (let i = 0; i < openBraces - closeBraces; i++) fixed += "}";
+          parsed = JSON.parse(fixed);
+        }
+      } else {
+        throw new Error("Could not parse scorecard JSON from: " + scorecardRaw.substring(0, 200));
+      }
     }
 
     const scorecard = normalizeScorecard(parsed);

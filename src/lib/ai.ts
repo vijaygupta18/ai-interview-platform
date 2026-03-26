@@ -344,5 +344,5 @@ Respond with ONLY valid JSON, no markdown, no code blocks, no explanation outsid
   "proctoringNotes": "<summary of integrity concerns or 'No issues detected'>"
 }`;
 
-  return callJuspayAI([{ role: "system", content: scorecardPrompt }], 2000, 0.3);
+  return callJuspayAI([{ role: "system", content: scorecardPrompt }], 4000, 0.3);
 }
