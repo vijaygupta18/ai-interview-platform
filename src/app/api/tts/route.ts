@@ -15,7 +15,7 @@ async function edgeTTS(text: string): Promise<Buffer | null> {
     execFileSync("edge-tts", [
       "--voice", voice,
       "--rate", rate,
-      "--pitch=-2Hz",
+      "--pitch=-6Hz",
       "--text", text,
       "--write-media", tmpFile,
     ], { timeout: 15000, stdio: "pipe" });

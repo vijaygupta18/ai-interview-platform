@@ -65,8 +65,8 @@ export async function POST(req: Request) {
         const path = await import("path");
         const tmpFile = path.join("/tmp", `_tts_${Date.now()}.mp3`);
         const voice = process.env.EDGE_TTS_VOICE || "en-IN-NeerjaNeural";
-        const rate = process.env.EDGE_TTS_RATE || "+10%";
-        execFileSync("edge-tts", ["--voice", voice, "--rate", rate, "--pitch=-4Hz", "--text", cleanedText, "--write-media", tmpFile], { timeout: 15000, stdio: "pipe" });
+        const rate = process.env.EDGE_TTS_RATE || "+15%";
+        execFileSync("edge-tts", ["--voice", voice, "--rate", rate, "--pitch=-6Hz", "--text", cleanedText, "--write-media", tmpFile], { timeout: 15000, stdio: "pipe" });
         const buf = fs.readFileSync(tmpFile);
         fs.unlinkSync(tmpFile);
         audioBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

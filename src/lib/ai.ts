@@ -296,23 +296,32 @@ IMPORTANT: Score relative to the ${interview.level} level bar. A Senior engineer
 
 ${levelBar}
 
-SCORING RUBRIC:
-- 5 = Exceptional. Exceeds bar significantly. Would be a top performer.
-- 4 = Strong. Meets bar with room to grow. Solid hire.
-- 3 = Adequate. Meets minimum bar. Borderline.
-- 2 = Below bar. Significant gaps. Would struggle in the role.
-- 1 = Far below bar. Fundamental gaps in required skills.
+SCORING RUBRIC (score RELATIVE to ${interview.level} ${interview.role} bar):
+- 5 = Exceptional. Answer demonstrates deep expertise beyond what's expected for this level. Gives specific examples, mentions tradeoffs, shows production experience. Would be a top performer.
+- 4 = Strong. Solid answer with good depth. Shows real experience, not textbook knowledge. Meets the bar with room to grow.
+- 3 = Adequate. Answer is correct but surface-level. Lacks specifics, examples, or depth. Meets minimum expectations for this role and level.
+- 2 = Below bar. Answer shows significant gaps. Vague, generic, or incorrect. Would struggle in the ${interview.role} role at ${interview.level} level.
+- 1 = Far below bar. Cannot answer basic questions expected for this role. Fundamental gaps, possible resume inflation.
 
-EVALUATION CRITERIA (adapt to the role — for non-tech roles, "technicalDepth" means role-specific expertise):
-- technicalDepth: for tech roles = coding/system knowledge. For HR = employment law/policy knowledge. For Ops = process expertise. For Sales = methodology knowledge. For CX = customer handling skills. Rate depth of role-specific expertise.
-- communication: clarity of explanation, structured thinking, ability to articulate complex ideas, listening skills
-- problemSolving: approach to novel problems, handling ambiguity, creative thinking, analytical ability
-- domainKnowledge: understanding of the specific domain (${interview.role}), industry best practices, tools of the trade
-- cultureFit: collaboration mindset, ownership, curiosity, adaptability, how they handle being challenged
+EVALUATION CRITERIA (adapt scoring to the SPECIFIC role type: ${interview.role}):
+- technicalDepth: Rate based on the ROLE — for tech roles: coding/system design depth. For HR: employment law/policy depth. For Ops: process optimization expertise. For Sales: methodology/pipeline depth. For CX: customer handling mastery. For PM: product thinking depth. Score HOW DEEP the candidate can go, not just surface knowledge.
+- communication: How clearly they explain complex ideas. Do they structure their answers? Do they use examples? Can they simplify for different audiences? For ${interview.level} level, expect ${interview.level === "Senior" || interview.level === "Staff" ? "highly structured, concise, executive-level communication" : interview.level === "Intern" || interview.level === "Junior" ? "basic clarity and willingness to ask clarifying questions" : "clear communication with some structure"}.
+- problemSolving: When given an unfamiliar problem or edge case, how do they approach it? Do they break it down? Consider tradeoffs? For ${interview.role}: evaluate whether their problem-solving approach fits this specific domain.
+- domainKnowledge: Deep understanding of ${interview.role} domain — tools, frameworks, best practices, industry trends. At ${interview.level} level, expect ${interview.level === "Senior" || interview.level === "Staff" ? "expert-level domain mastery with opinions on best practices" : "working knowledge of common tools and practices"}.
+- cultureFit: Ownership, curiosity, collaboration. How do they handle being challenged or corrected? Do they admit gaps honestly? For ${interview.level}: ${interview.level === "Senior" || interview.level === "Staff" ? "expect leadership, mentorship mindset, strategic thinking" : "expect enthusiasm, willingness to learn, team orientation"}.
+
+SCORING APPROACH:
+1. For each answer the candidate gave, evaluate: Was this answer appropriate for a ${interview.level} ${interview.role}?
+2. A good answer for a Junior might be inadequate for a Senior
+3. Textbook answers without real examples should score lower (2-3)
+4. Specific, experience-backed answers with tradeoffs should score higher (4-5)
+5. Deflection, topic-changing, or inability to answer basics = 1-2
 
 RECOMMENDATION GUIDE:
-- strong_hire: overall >= 4 AND no dimension below 3
-- hire: overall >= 3.5 AND no dimension below 2
+- strong_hire: overall >= 4 AND no dimension below 3. Candidate clearly exceeds the ${interview.level} bar.
+- hire: overall >= 3.5 AND no dimension below 2. Candidate meets the bar for ${interview.level} ${interview.role}.
+- no_hire: overall < 3 OR any critical dimension below 2. Candidate doesn't meet the ${interview.level} bar.
+- strong_no_hire: overall < 2 OR fundamental dishonesty/inability. Clear misfit for the role.
 - no_hire: overall < 3 OR any critical dimension below 2
 - strong_no_hire: overall < 2 OR fundamental dishonesty/inability to answer basic questions
 
