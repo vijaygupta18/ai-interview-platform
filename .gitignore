@@ -9,3 +9,4 @@ _tts_*
 tsconfig.tsbuildinfo
 data/
 k8s/
+DEPLOYMENT.md
