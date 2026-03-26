@@ -53,6 +53,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [screenSharing, setScreenSharing] = useState(false);
   const [expired, setExpired] = useState(false);
   const [sttConnected, setSttConnected] = useState(false);
+  const [sttEverConnected, setSttEverConnected] = useState(false);
 
   // Pre-interview checks
   const [cameraReady, setCameraReady] = useState(false);
@@ -450,6 +451,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     dgSocket.onopen = () => {
       reconnectCountRef.current = 0;
       setSttConnected(true);
+      setSttEverConnected(true);
       // Extract audio-only stream for MediaRecorder
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length === 0) {
@@ -957,8 +959,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         <div className="flex items-center gap-3">
           {/* STT Connection Status */}
           <div className="flex items-center gap-1.5">
-            <span className={`inline-flex h-2 w-2 rounded-full ${sttConnected ? "bg-green-500" : "bg-red-500"}`} />
-            {!sttConnected && (
+            <span className={`inline-flex h-2 w-2 rounded-full ${sttConnected ? "bg-green-500" : sttEverConnected ? "bg-red-500" : "bg-yellow-500"}`} />
+            {!sttConnected && sttEverConnected && (
               <span className="text-xs text-red-400">Reconnecting...</span>
             )}
           </div>
