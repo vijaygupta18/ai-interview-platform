@@ -10,30 +10,13 @@ import mammoth from "mammoth";
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Write to temp file, parse via child process to avoid Next.js webpack issues
-    const fs = await import("fs");
-    const path = await import("path");
-    const { execSync } = await import("child_process");
-
-    const tmpPath = path.join(process.cwd(), `_tmp_resume_${Date.now()}.pdf`);
-    fs.writeFileSync(tmpPath, buffer);
-
-    try {
-      const result = execSync(
-        `node -e "const p=require('pdf-parse');const fs=require('fs');p(fs.readFileSync('${tmpPath}')).then(d=>{process.stdout.write(d.text)}).catch(e=>{process.stderr.write(e.message);process.exit(1)})"`,
-        { timeout: 10000, maxBuffer: 10 * 1024 * 1024 }
-      );
-      fs.unlinkSync(tmpPath);
-      const text = result.toString().trim();
-      console.log(`PDF parsed successfully: ${text.length} chars`);
-      return text;
-    } catch (parseErr: any) {
-      fs.unlinkSync(tmpPath);
-      console.error("PDF child process failed:", parseErr.stderr?.toString());
-      throw parseErr;
-    }
+    const pdfParse = require("pdf-parse");
+    const data = await pdfParse(buffer);
+    const text = data.text?.trim() || "";
+    console.log(`PDF parsed: ${text.length} chars`);
+    return text || "Resume provided but could not be parsed. Proceed with general interview questions.";
   } catch (err) {
-    console.error("PDF extraction failed completely:", err);
+    console.error("PDF parse failed:", err);
     return "Resume provided but could not be parsed. Proceed with general interview questions.";
   }
 }
