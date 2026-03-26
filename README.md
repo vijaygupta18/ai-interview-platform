@@ -47,10 +47,11 @@
 
 ### Voice Interview Engine
 - AI conducts natural voice conversations
-- Deepgram STT (real-time) + TTS
-- Indian accent voices (Edge TTS - free)
-- Domain-aware: Tech, HR, Sales, Ops, CX
+- Deepgram Nova-2 STT (real-time, Indian English)
+- Deepgram Aura TTS (primary) + Edge TTS (free fallback)
+- Domain-aware: Tech, HR, Sales, Ops, CX, PM, Design, Data, Finance
 - Level-calibrated: Intern to Director
+- Time-aware pacing (adapts to interview duration)
 - Custom question banks
 - Resume-based follow-ups
 
@@ -58,13 +59,13 @@
 <td width="50%">
 
 ### Proctoring & Integrity
-- Face detection (Chrome API + fallback)
+- Face detection (Chrome API + canvas fallback)
 - Eye tracking (gaze direction)
-- Tab switch monitoring (debounced)
-- Phone/device detection
-- Mandatory screen sharing
+- Window/app switch detection (3 methods: blur + visibility + focus poll)
+- Phone/device detection (bright object analysis)
+- Mandatory screen sharing + fullscreen enforcement
 - Periodic photo capture (every 60s)
-- 4-strike warning system
+- Configurable strike system (default 10, server-side count)
 - Copy/paste blocking
 
 </td>
@@ -76,11 +77,13 @@
 - Auto-scorecard when interview ends
 - 5 dimensions (Technical, Communication, Problem Solving, Domain, Culture)
 - Evidence-based (exact candidate quotes)
-- Level-calibrated scoring
+- Level-calibrated scoring (Intern to Director)
+- STT-aware evaluation (ignores transcription errors)
 - Hire / No Hire recommendation
 - Proctoring report in assessment
 - Candidate comparison (radar chart)
 - DB-backed dedup (no double scoring)
+- Rescore capability
 
 </td>
 <td width="50%">
