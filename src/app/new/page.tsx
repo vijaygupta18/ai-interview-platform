@@ -187,15 +187,25 @@ export default function NewInterviewPage() {
                 {copied ? "Copied!" : "Copy"}
               </button>
             </div>
+            {selectedTemplateId ? (
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <p className="text-sm text-green-700">Interview invite email sent to <strong>{email}</strong></p>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 text-center">No email template was selected — share the link manually.</p>
+            )}
             <div className="flex gap-3">
+              <button onClick={() => { setInterviewLink(""); setFile(null); setRole(""); setEmail(""); setCandidateName(""); setAdditionalContext(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
+                Create Another
+              </button>
               <button
                 onClick={() => { window.location.href = `mailto:${email}?subject=Your Interview&body=Here is your interview link: ${encodeURIComponent(interviewLink)}`; }}
-                className="btn-primary flex-1"
+                className="btn-secondary flex-1"
               >
-                Email to Candidate
-              </button>
-              <button onClick={() => { setInterviewLink(""); setFile(null); setRole(""); setEmail(""); setAdditionalContext(""); }} className="btn-secondary">
-                Create Another
+                Open in Mail App
               </button>
             </div>
           </div>
