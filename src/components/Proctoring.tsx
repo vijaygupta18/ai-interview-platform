@@ -271,59 +271,82 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   }, [enabled, alert]);
 
   // Face detection + gaze tracking
+  // Chrome: native FaceDetector API (<1ms)
+  // Firefox/Safari: MediaPipe Face Detection (~3ms, 1MB model)
+  const mediaPipeDetectorRef = useRef<any>(null);
+
   useEffect(() => {
     if (!enabled) return;
 
+    let useNative = false;
     if ("FaceDetector" in window) {
       try {
         faceDetectorRef.current = new (window as any).FaceDetector({ maxDetectedFaces: 5, fastMode: true });
+        useNative = true;
       } catch { faceDetectorRef.current = null; }
+    }
+
+    // For non-Chrome: load MediaPipe face detector
+    if (!useNative && !mediaPipeDetectorRef.current) {
+      (async () => {
+        try {
+          const vision = await import("@mediapipe/tasks-vision");
+          const { FaceDetector, FilesetResolver } = vision;
+          const filesetResolver = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+          );
+          mediaPipeDetectorRef.current = await FaceDetector.createFromOptions(filesetResolver, {
+            baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite" },
+            runningMode: "IMAGE",
+            minDetectionConfidence: 0.5,
+          });
+          console.log("[Proctoring] MediaPipe face detector loaded");
+        } catch (err) {
+          console.warn("[Proctoring] MediaPipe failed to load:", err);
+        }
+      })();
     }
 
     const detect = async () => {
       const video = videoRef.current;
-      const canvas = faceCanvasRef.current;
-      if (!video || !canvas || video.readyState < 2 || video.videoWidth === 0) return;
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+      let faceCount = -1; // -1 = detection not available
+      let faceCenterX: number | null = null;
 
       if (faceDetectorRef.current) {
+        // Chrome native FaceDetector
         try {
           const faces = await faceDetectorRef.current.detect(video);
-          if (faces.length === 0) {
-            alert("face_missing", "flag", "No face detected — please face the camera");
-          } else if (faces.length > 1) {
-            alert("multiple_faces", "flag", `${faces.length} faces detected`);
-          } else {
-            const face = faces[0];
-            const faceCenterX = face.boundingBox.x + face.boundingBox.width / 2;
-            const offset = Math.abs(faceCenterX - video.videoWidth / 2);
-            if (offset > video.videoWidth * 0.4) {
-              alert("eye_away", "flag", "Candidate appears to be looking away");
-            }
+          faceCount = faces.length;
+          if (faces.length === 1) {
+            faceCenterX = faces[0].boundingBox.x + faces[0].boundingBox.width / 2;
           }
         } catch {}
-      } else {
-        // Canvas fallback — motion-based presence detection (race-neutral alternative to skin-tone)
-        canvas.width = 80;
-        canvas.height = 60;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.drawImage(video, 0, 0, 80, 60);
-        const currentData = ctx.getImageData(0, 0, 80, 60).data;
-        if (prevFrameRef.current) {
-          let changedPixels = 0;
-          const totalPixels = 80 * 60;
-          for (let i = 0; i < currentData.length; i += 4) {
-            const diff = Math.abs(currentData[i] - prevFrameRef.current[i]) +
-                         Math.abs(currentData[i+1] - prevFrameRef.current[i+1]) +
-                         Math.abs(currentData[i+2] - prevFrameRef.current[i+2]);
-            if (diff > 30) changedPixels++;
+      } else if (mediaPipeDetectorRef.current) {
+        // MediaPipe fallback (Firefox/Safari)
+        try {
+          const result = mediaPipeDetectorRef.current.detect(video);
+          faceCount = result.detections.length;
+          if (result.detections.length === 1) {
+            const box = result.detections[0].boundingBox;
+            faceCenterX = box.originX + box.width / 2;
           }
-          if (changedPixels / totalPixels < 0.02) {
-            alert("face_missing", "flag", "No movement detected — please face the camera");
-          }
-        }
-        prevFrameRef.current = new Uint8ClampedArray(currentData);
+        } catch {}
       }
+
+      // Process results
+      if (faceCount === 0) {
+        alert("face_missing", "flag", "No face detected — please face the camera");
+      } else if (faceCount > 1) {
+        alert("multiple_faces", "flag", `${faceCount} faces detected`);
+      } else if (faceCount === 1 && faceCenterX !== null) {
+        const offset = Math.abs(faceCenterX - video.videoWidth / 2);
+        if (offset > video.videoWidth * 0.4) {
+          alert("eye_away", "flag", "Candidate appears to be looking away");
+        }
+      }
+      // faceCount === -1 means no detector available — skip silently
     };
 
     const interval = setInterval(detect, 4000);
