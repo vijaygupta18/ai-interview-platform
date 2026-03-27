@@ -27,7 +27,7 @@ async function sendProctoringEvent(interviewId: string, type: string, severity: 
 }
 
 export default function Proctoring({ videoRef, interviewId, enabled, onAlert, token }: ProctoringProps) {
-  const faceLandmarkerRef = useRef<any>(null);
+  // faceLandmarkerRef removed — FaceLandmarker model no longer available on Google CDN
   const faceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const photoCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const phoneCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -279,15 +279,16 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     };
   }, [enabled, alert]);
 
-  // Face detection + gaze tracking using MediaPipe FaceLandmarker
-  // Works on ALL browsers, provides 478 face landmarks including iris positions
-  // Enables true gaze detection (where eyes are looking, not just head position)
+  // Face detection using MediaPipe FaceDetector (BlazeFace)
+  // Works on ALL browsers — detects face count + bounding box position
+  // Chrome native FaceDetector used as immediate fallback while MediaPipe loads
   const nativeFaceDetectorRef = useRef<any>(null);
+  const mediaPipeDetectorRef = useRef<any>(null);
 
   useEffect(() => {
     if (!enabled) return;
 
-    // Try Chrome native FaceDetector first (fastest, no download)
+    // Chrome native FaceDetector (instant, no download)
     if ("FaceDetector" in window) {
       try {
         nativeFaceDetectorRef.current = new (window as any).FaceDetector({ maxDetectedFaces: 5, fastMode: true });
@@ -295,40 +296,27 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       } catch { nativeFaceDetectorRef.current = null; }
     }
 
-    // Load MediaPipe FaceLandmarker for gaze tracking (all browsers)
+    // MediaPipe FaceDetector for all browsers (1MB model, works everywhere)
     let cancelled = false;
     (async () => {
       try {
         const vision = await import("@mediapipe/tasks-vision");
-        const { FaceLandmarker, FilesetResolver } = vision;
+        const { FaceDetector, FilesetResolver } = vision;
         const filesetResolver = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
         if (cancelled) return;
-        // Try GPU first, fall back to CPU
-        for (const delegate of ["GPU", "CPU"] as const) {
-          try {
-            faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(filesetResolver, {
-              baseOptions: {
-                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.tflite",
-                delegate,
-              },
-              runningMode: "IMAGE",
-              numFaces: 5,
-              minFaceDetectionConfidence: 0.5,
-              minTrackingConfidence: 0.5,
-              outputFaceBlendshapes: false,
-              outputFacialTransformationMatrixes: false,
-            });
-            console.log(`[Proctoring] FaceLandmarker loaded (${delegate})`);
-            break;
-          } catch (e) {
-            console.warn(`[Proctoring] FaceLandmarker ${delegate} failed:`, e);
-            if (delegate === "CPU") console.error("[Proctoring] FaceLandmarker unavailable");
-          }
-        }
+        mediaPipeDetectorRef.current = await FaceDetector.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite",
+            delegate: "GPU",
+          },
+          runningMode: "IMAGE",
+          minDetectionConfidence: 0.5,
+        });
+        console.log("[Proctoring] MediaPipe FaceDetector loaded");
       } catch (err) {
-        console.warn("[Proctoring] FaceLandmarker import failed:", err);
+        console.warn("[Proctoring] MediaPipe FaceDetector failed:", err);
       }
     })();
 
@@ -336,87 +324,38 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0) return;
 
-      // If MediaPipe not loaded yet, use Chrome native FaceDetector for basic count
-      if (!faceLandmarkerRef.current) {
-        if (nativeFaceDetectorRef.current) {
-          try {
-            const faces = await nativeFaceDetectorRef.current.detect(video);
-            if (faces.length === 0) alert("face_missing", "flag", "No face detected — please face the camera");
-            else if (faces.length > 1) alert("multiple_faces", "flag", `${faces.length} faces detected`);
-          } catch {}
-        }
-        return;
+      let faceCount = -1;
+      let faceCenterX: number | null = null;
+
+      // Try MediaPipe first, then Chrome native
+      if (mediaPipeDetectorRef.current) {
+        try {
+          const result = mediaPipeDetectorRef.current.detect(video);
+          faceCount = result.detections.length;
+          if (faceCount === 1) {
+            const box = result.detections[0].boundingBox;
+            faceCenterX = box.originX + box.width / 2;
+          }
+        } catch {}
+      } else if (nativeFaceDetectorRef.current) {
+        try {
+          const faces = await nativeFaceDetectorRef.current.detect(video);
+          faceCount = faces.length;
+          if (faceCount === 1) {
+            faceCenterX = faces[0].boundingBox.x + faces[0].boundingBox.width / 2;
+          }
+        } catch {}
       }
 
-      try {
-        const result = faceLandmarkerRef.current.detect(video);
-        const faceCount = result.faceLandmarks.length;
-
-        if (faceCount === 0) {
-          alert("face_missing", "flag", "No face detected — please face the camera");
-        } else if (faceCount > 1) {
-          alert("multiple_faces", "flag", `${faceCount} faces detected`);
-        } else if (faceCount === 1) {
-          const landmarks = result.faceLandmarks[0];
-
-          // --- HEAD TURN DETECTION ---
-          // Use nose tip (landmark 1) position relative to frame center
-          const noseTip = landmarks[1];
-          const headOffsetX = Math.abs(noseTip.x - 0.5); // 0 = centered, 0.5 = edge
-          if (headOffsetX > 0.2) {
-            alert("eye_away", "flag", "Candidate appears to be looking away");
-            return;
-          }
-
-          // --- TRUE GAZE DETECTION ---
-          // Left eye iris center: landmark 468
-          // Right eye iris center: landmark 473
-          // Left eye inner corner: landmark 133, outer corner: landmark 33
-          // Right eye inner corner: landmark 362, outer corner: landmark 263
-          if (landmarks.length > 473) {
-            // Left eye horizontal gaze
-            const leftIris = landmarks[468];
-            const leftInner = landmarks[133];
-            const leftOuter = landmarks[33];
-            const leftEyeWidth = Math.abs(leftOuter.x - leftInner.x);
-            const leftIrisOffset = (leftIris.x - leftInner.x) / leftEyeWidth;
-
-            // Right eye horizontal gaze
-            const rightIris = landmarks[473];
-            const rightInner = landmarks[362];
-            const rightOuter = landmarks[263];
-            const rightEyeWidth = Math.abs(rightOuter.x - rightInner.x);
-            const rightIrisOffset = (rightIris.x - rightInner.x) / rightEyeWidth;
-
-            // Average gaze direction (0.5 = looking straight, <0.25 or >0.75 = looking sideways)
-            const avgGaze = (leftIrisOffset + rightIrisOffset) / 2;
-
-            if (avgGaze < 0.25 || avgGaze > 0.75) {
-              alert("eye_away", "flag", "Candidate's eyes appear to be looking away from the screen");
-            }
-
-            // Vertical gaze (looking down at phone)
-            // Left eye top: 159, bottom: 145
-            // Right eye top: 386, bottom: 374
-            const leftEyeTop = landmarks[159];
-            const leftEyeBottom = landmarks[145];
-            const leftEyeHeight = Math.abs(leftEyeTop.y - leftEyeBottom.y);
-            const leftIrisY = (leftIris.y - leftEyeTop.y) / leftEyeHeight;
-
-            const rightEyeTop = landmarks[386];
-            const rightEyeBottom = landmarks[374];
-            const rightEyeHeight = Math.abs(rightEyeTop.y - rightEyeBottom.y);
-            const rightIrisY = (rightIris.y - rightEyeTop.y) / rightEyeHeight;
-
-            const avgVerticalGaze = (leftIrisY + rightIrisY) / 2;
-
-            if (avgVerticalGaze > 0.75) {
-              alert("eye_away", "flag", "Candidate appears to be looking down");
-            }
-          }
+      if (faceCount === 0) {
+        alert("face_missing", "flag", "No face detected — please face the camera");
+      } else if (faceCount > 1) {
+        alert("multiple_faces", "flag", `${faceCount} faces detected`);
+      } else if (faceCount === 1 && faceCenterX !== null) {
+        const offset = Math.abs(faceCenterX - video.videoWidth / 2);
+        if (offset > video.videoWidth * 0.25) {
+          alert("eye_away", "flag", "Candidate appears to be looking away");
         }
-      } catch {
-        // Detection failed — skip silently
       }
     };
 
