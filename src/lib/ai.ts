@@ -18,9 +18,15 @@ export function stripThinking(text: string): string {
   // First check if response has obvious thinking markers
   const hasThinkingMarkers = /<think|^\d+\.\s*(NOT|I'm |First|Then)/mi.test(cleaned);
   if (!hasThinkingMarkers) {
-    // No thinking detected — return as-is (just clean XML tags)
-    // Final cleanup: remove stray formatting
-    cleaned = cleaned.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").trim();
+    // No thinking detected — just clean formatting for TTS
+    cleaned = cleaned
+      .replace(/\*\*/g, "").replace(/\*/g, "")
+      .replace(/^#+\s*/gm, "").replace(/^[-*•]\s+/gm, "")
+      .replace(/`[^`]*`/g, (m) => m.slice(1, -1))
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/[~_{}|<>]/g, "")
+      .trim();
     return cleaned || text.trim();
   }
 
@@ -46,8 +52,19 @@ export function stripThinking(text: string): string {
     cleaned = spokenParagraphs.join("\n\n").trim();
   }
 
-  // Final cleanup: remove stray formatting
-  cleaned = cleaned.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").trim();
+  // Final cleanup: remove all formatting/special chars that sound bad in TTS
+  cleaned = cleaned
+    .replace(/\*\*/g, "")           // bold **text**
+    .replace(/\*/g, "")             // italic *text*
+    .replace(/^#+\s*/gm, "")        // headers # ## ###
+    .replace(/^[-*•]\s+/gm, "")     // bullet points - * •
+    .replace(/^\d+\.\s+/gm, "")     // numbered lists 1. 2. 3.
+    .replace(/`[^`]*`/g, (m) => m.slice(1, -1)) // inline code `text` → text
+    .replace(/```[\s\S]*?```/g, "")  // code blocks
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links [text](url) → text
+    .replace(/[~_{}|<>]/g, "")      // stray markdown chars
+    .replace(/\n{3,}/g, "\n\n")     // excessive newlines
+    .trim();
 
   return cleaned || text.trim();
 }
@@ -183,7 +200,7 @@ function buildSystemPrompt(interview: Interview): string {
     ? `The candidate's name is ${candidateName}. Use their first name naturally in conversation (e.g., "That's interesting, ${candidateName.split(" ")[0]}" or "So ${candidateName.split(" ")[0]}, tell me about...").`
     : `You don't know the candidate's name yet. In your opening, ask them to introduce themselves and then use their name naturally throughout.`;
 
-  return `You are Alex, a senior interviewer conducting a ${interview.duration}-minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
+  return `You are Alex, a senior interviewer conducting a ${interview.duration} minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
 
 ${nameInstruction}
 
@@ -221,7 +238,7 @@ INTERVIEW STRATEGY:
 - React naturally before asking the next question ("That makes sense", "Interesting", "I see")
 
 TIME MANAGEMENT:
-- This is a ${interview.duration}-minute interview. You have limited time — use it wisely.
+- This is a ${interview.duration} minute interview. You have limited time — use it wisely.
 - You have ${interview.focusAreas.length} focus areas with ~${minPerArea} min each. Don't spend too long on one area.
 - Aim for 2-3 questions per focus area (including follow-ups). Move on when you have enough signal.
 - If a candidate gives a strong, detailed answer, acknowledge it and move to the next topic — don't keep drilling the same point.
@@ -318,7 +335,7 @@ export async function generateScorecard(interview: Interview): Promise<string> {
   const scorecardPrompt = `You are a senior hiring manager evaluating an interview for a ${interview.level} ${interview.role} position. Candidate: ${candidateName}. Focus areas: ${interview.focusAreas.join(", ")}.
 
 INTERVIEW CONTEXT:
-- This was a ${interviewDurationMin}-minute voice interview conducted via speech-to-text (STT)
+- This was a ${interviewDurationMin} minute voice interview conducted via speech-to-text (STT)
 - Total exchanges: ${transcriptMessages} messages (${candidateMessages} from candidate)
 - The candidate had limited time to cover ${interview.focusAreas.length} focus areas (~${Math.floor(interviewDurationMin / (interview.focusAreas.length || 1))} min each)
 - Judge the candidate on what they COULD cover in the available time, not on topics that weren't reached

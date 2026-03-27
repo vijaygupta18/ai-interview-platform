@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 
     // Build AI messages
     // Build messages for streaming AI call
-    const sysPrompt = interview.role ? `You are Alex, a senior interviewer conducting a ${interview.duration}-minute interview for a ${interview.level} ${interview.role} position. Reply with ONLY what you would say. 2-3 sentences max. No markdown.` : "";
+    const sysPrompt = interview.role ? `You are Alex, a senior interviewer conducting a ${interview.duration} minute interview for a ${interview.level} ${interview.role} position. Reply with ONLY what you would say. 2-3 sentences max. No markdown.` : "";
 
     // Use the existing non-streaming path but with stream=true
     const aiMessages: { role: string; content: string }[] = [

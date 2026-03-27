@@ -833,11 +833,94 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     };
   }, [getAIResponse, isStarted]);
 
-  // Start STT (used for both fresh start and resume)
+  // Browser Speech API STT (free, zero latency, no API key)
+  const browserRecognitionRef = useRef<any>(null);
+  const startBrowserSTT = useCallback(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return false;
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-IN";
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        console.log("[STT] Browser Speech API started");
+        setSttConnected(true);
+        setSttEverConnected(true);
+        sttProviderRef.current = "browser";
+      };
+
+      recognition.onresult = (event: any) => {
+        lastActivityRef.current = Date.now();
+        const result = event.results[event.results.length - 1];
+        const text = result[0].transcript;
+        const isFinal = result.isFinal;
+
+        // Interrupt: if candidate speaks while AI is talking, stop AI audio
+        if (isAISpeakingRef.current && isFinal && text.trim().length > 3) {
+          if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
+          setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
+        }
+        if (isAISpeakingRef.current) return;
+
+        if (!isFinal) {
+          setInterimTranscript(text);
+          return;
+        }
+
+        setInterimTranscript("");
+        finalTranscriptBufferRef.current += (finalTranscriptBufferRef.current ? " " : "") + text;
+
+        // Reset timer on every final — wait 500ms of silence before sending to AI
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => {
+          const candidateText = finalTranscriptBufferRef.current.trim();
+          if (!candidateText) return;
+          finalTranscriptBufferRef.current = "";
+          const entry: TranscriptEntry = { role: "candidate", text: candidateText, timestamp: Date.now() };
+          setTranscript((prev) => { const updated = [...prev, entry]; getAIResponse(updated); return updated; });
+        }, 500);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn("[STT] Browser Speech API error:", event.error);
+        if (event.error === "not-allowed" || event.error === "service-not-available") {
+          // Fall back to Deepgram
+          console.log("[STT] Falling back to Deepgram...");
+          setSttConnected(false);
+          startDeepgramSTT();
+        }
+      };
+
+      recognition.onend = () => {
+        // Auto-restart if interview is still active
+        if (isStarted && !isEndingRef.current) {
+          try { recognition.start(); } catch {}
+        }
+      };
+
+      recognition.start();
+      browserRecognitionRef.current = recognition;
+      return true;
+    } catch (err) {
+      console.warn("[STT] Browser Speech API failed:", err);
+      return false;
+    }
+  }, [getAIResponse, isStarted]);
+
+  // Start STT — try browser first, fall back to Deepgram
   const beginListening = useCallback(() => {
-    startDeepgramSTT();
-    console.log("[Interview] STT started, listening for candidate speech...");
-  }, [startDeepgramSTT]);
+    const browserWorked = startBrowserSTT();
+    if (browserWorked) {
+      console.log("[Interview] Using Browser Speech API (free, zero latency)");
+    } else {
+      console.log("[Interview] Browser STT unavailable, using Deepgram");
+      startDeepgramSTT();
+    }
+  }, [startBrowserSTT, startDeepgramSTT]);
 
   // Resume STT is now handled in the media setup useEffect via needsResumeRef
 

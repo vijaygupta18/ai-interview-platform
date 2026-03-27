@@ -115,7 +115,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
           Great news — we'd love to chat with you about the <strong style="color:#111827">${escapeHtml(v.role)}</strong> role at <strong style="color:#111827">${escapeHtml(v.orgName)}</strong>!
         </p>
         <p style="color:#4b5563;font-size:15px;line-height:1.6;margin:0 0 24px">
-          We use an AI interviewer to make the process convenient — you can take the interview anytime, from anywhere. It's a ${v.duration}-minute voice conversation, so just be yourself!
+          We use an AI interviewer to make the process convenient — you can take the interview anytime, from anywhere. It's a ${v.duration} minute voice conversation, so just be yourself!
         </p>
         <div style="text-align:center;margin:0 0 24px">
           <a href="${escapeHtml(v.interviewUrl)}" style="display:inline-block;background:#4f46e5;color:white;font-weight:600;font-size:15px;padding:14px 40px;border-radius:8px;text-decoration:none">
@@ -149,7 +149,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
           Hi ${escapeHtml(v.candidateName?.split(" ")[0] || "there")},
         </p>
         <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 24px">
-          Click below to start your ${v.duration}-minute AI interview for <strong>${escapeHtml(v.role)}</strong> (${escapeHtml(v.level)}).
+          Click below to start your ${v.duration} minute AI interview for <strong>${escapeHtml(v.role)}</strong> (${escapeHtml(v.level)}).
         </p>
         <div style="text-align:center;margin:0 0 24px">
           <a href="${escapeHtml(v.interviewUrl)}" style="display:inline-block;background:#4f46e5;color:white;font-weight:600;font-size:15px;padding:14px 40px;border-radius:8px;text-decoration:none">
