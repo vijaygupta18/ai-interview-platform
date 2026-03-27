@@ -42,12 +42,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "This interview link has expired", expired: true }, { status: 410 });
   }
 
-  // Include STT credentials only for active interviews accessed by candidate (token auth)
-  const token = new URL(req.url).searchParams.get("token");
-  if (token && interview.status === "in_progress" && process.env.DEEPGRAM_API_KEY) {
-    return NextResponse.json({ ...interview, deepgramSttId: process.env.DEEPGRAM_API_KEY });
-  }
-
   return NextResponse.json(interview);
 }
 

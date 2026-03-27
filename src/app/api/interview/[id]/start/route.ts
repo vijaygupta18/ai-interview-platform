@@ -27,5 +27,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     startedAt: new Date().toISOString(),
   });
 
-  return NextResponse.json({ ok: true, deepgramSttId: process.env.DEEPGRAM_API_KEY || "" });
+  return NextResponse.json({ ok: true });
 }

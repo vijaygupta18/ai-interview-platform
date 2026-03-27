@@ -76,7 +76,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const deepgramSttIdRef = useRef<string>("");
+  const sttProviderRef = useRef<string>("deepgram");
   const isProcessingRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -87,7 +87,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const reconnectCountRef = useRef(0);
   const tokenRef = useRef("");
 
-  // Fetch interview data + deepgram key on mount
+  // Fetch interview data on mount
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     tokenRef.current = searchParams.get("token") || "";
@@ -108,11 +108,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           return;
         }
         setInterviewData(interview);
-
-        // For resume (in_progress), STT key comes embedded in interview response
-        if (interview.status === "in_progress" && interview.deepgramSttId) {
-          deepgramSttIdRef.current = interview.deepgramSttId;
-        }
 
         // Resume interview if already started (in_progress OR has startedAt)
         const hasStarted = interview.status === "in_progress" || interview.startedAt || (interview.transcript?.length > 0);
@@ -454,14 +449,27 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return () => clearInterval(watchdog);
   }, [isStarted, isAISpeaking, interimTranscript, getAIResponse, transcript]);
 
-  const startDeepgramSTT = useCallback(() => {
+  const startDeepgramSTT = useCallback(async () => {
     const stream = mediaStreamRef.current;
-    if (!stream || !deepgramSttIdRef.current) return;
+    if (!stream) return;
 
-    const dgSocket = new WebSocket(
-      "wss://api.deepgram.com/v1/listen?model=nova-2&language=en-IN&punctuate=true&interim_results=true&endpointing=2000&vad_events=true",
-      ["token", deepgramSttIdRef.current]
-    );
+    // Fetch STT connection info from server (no API keys in browser)
+    let sttConfig: { provider: string; wsUrl: string; protocols?: string[] };
+    try {
+      const sttRes = await fetch(`/api/stt-proxy?token=${tokenRef.current}`);
+      if (!sttRes.ok) {
+        console.error("[STT] Failed to get STT config:", sttRes.status);
+        return;
+      }
+      sttConfig = await sttRes.json();
+    } catch (err) {
+      console.error("[STT] Failed to fetch STT config:", err);
+      return;
+    }
+
+    sttProviderRef.current = sttConfig.provider;
+
+    const dgSocket = new WebSocket(sttConfig.wsUrl, sttConfig.protocols || []);
     dgSocketRef.current = dgSocket;
 
     dgSocket.onopen = () => {
@@ -501,12 +509,27 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
     dgSocket.onmessage = (msg) => {
       const data = JSON.parse(msg.data);
-      if (data.type === "Results") {
+
+      // Provider-aware transcript parsing
+      let text: string | undefined;
+      let isFinal: boolean | undefined;
+      let speechFinal: boolean | undefined;
+
+      if (sttProviderRef.current === "sarvam") {
+        text = data.transcript || data.text || "";
+        isFinal = data.is_final ?? data.final ?? true;
+        speechFinal = data.speech_final ?? data.final ?? true;
+      } else {
+        // Deepgram format
+        if (data.type !== "Results") return;
         const alt = data.channel?.alternatives?.[0];
         if (!alt) return;
-        const text = alt.transcript;
-        const isFinal = data.is_final;
-        const speechFinal = data.speech_final;
+        text = alt.transcript;
+        isFinal = data.is_final;
+        speechFinal = data.speech_final;
+      }
+
+      {
 
         console.log("[STT]", { text: text?.substring(0, 50), isFinal, speechFinal });
 
@@ -591,17 +614,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setRemainingSeconds(durationMinutes * 60);
     setIsStarted(true);
 
-    // Mark interview as in_progress and get STT credentials
+    // Mark interview as in_progress
     try {
-      const startRes = await fetch(`/api/interview/${interviewId}/start`, {
+      await fetch(`/api/interview/${interviewId}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: tokenRef.current }),
       });
-      const startData = await startRes.json();
-      if (startData.deepgramSttId) {
-        deepgramSttIdRef.current = startData.deepgramSttId;
-      }
     } catch (err) {
       console.error("Failed to start interview:", err);
     }
