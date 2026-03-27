@@ -168,8 +168,6 @@ export async function POST(req: Request) {
               })}\n\n`));
             }).catch((err: any) => {
               console.warn(`[Stream] TTS failed for sentence ${idx}:`, err.message);
-              // Send skip event so client doesn't wait for this idx forever
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "audio_skip", idx })}\n\n`));
             });
             ttsPromises.push(p);
           };
