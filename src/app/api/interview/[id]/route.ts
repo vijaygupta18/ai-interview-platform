@@ -7,13 +7,27 @@ import { pool } from "@/lib/db";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const url = new URL(req.url);
+
+  // Share mode: allow unauthenticated read-only access for completed interviews
+  const shareMode = url.searchParams.get("share") === "true";
+  if (shareMode) {
+    const interview = await getInterview(id);
+    if (interview && interview.status === "completed") {
+      return NextResponse.json({
+        ...interview,
+        resume: "",
+        token: "",
+        browserFingerprint: null,
+      });
+    }
+    return NextResponse.json({ error: "Not available for sharing" }, { status: 404 });
+  }
 
   const { authorized } = await validateAccess(req, id);
   if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const url = new URL(req.url);
   const includePhotos = url.searchParams.get("photos") === "true";
 
   const interview = includePhotos

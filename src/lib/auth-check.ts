@@ -9,7 +9,14 @@ import { pool } from "./db";
 export async function validateAccess(req: Request, interviewId: string): Promise<{ authorized: boolean; session: any }> {
   // Check session first (interviewer)
   const session = await getServerSession(authOptions);
-  if (session?.user) return { authorized: true, session };
+  if (session?.user) {
+    // Verify interview belongs to user's org
+    const { rows } = await pool.query("SELECT org_id FROM interviews WHERE id = $1", [interviewId]);
+    if (rows.length > 0 && rows[0].org_id && (session.user as any).orgId && rows[0].org_id !== (session.user as any).orgId) {
+      return { authorized: false, session: null };
+    }
+    return { authorized: true, session };
+  }
 
   // Check token (candidate)
   const url = new URL(req.url);
@@ -36,7 +43,14 @@ export async function validateInterviewExists(interviewId: string): Promise<bool
 export async function validateAccessPost(interviewId: string, token?: string): Promise<boolean> {
   // Check session first (interviewer)
   const session = await getServerSession(authOptions);
-  if (session?.user) return true;
+  if (session?.user) {
+    // Verify interview belongs to user's org
+    const { rows } = await pool.query("SELECT org_id FROM interviews WHERE id = $1", [interviewId]);
+    if (rows.length > 0 && rows[0].org_id && (session.user as any).orgId && rows[0].org_id !== (session.user as any).orgId) {
+      return false;
+    }
+    return true;
+  }
 
   // Check token (candidate)
   if (token) {

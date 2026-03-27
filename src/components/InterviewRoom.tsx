@@ -241,6 +241,21 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     };
   }, [isStarted, remainingSeconds > 0]);
 
+  // Proctoring heartbeat — server detects if proctoring is silently disabled
+  useEffect(() => {
+    if (!isStarted) return;
+    const sendHeartbeat = () => {
+      fetch("/api/proctor-heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interviewId, token: tokenRef.current }),
+      }).catch(() => {});
+    };
+    sendHeartbeat(); // Send immediately on start
+    const interval = setInterval(sendHeartbeat, 15000);
+    return () => clearInterval(interval);
+  }, [isStarted, interviewId]);
+
   // Time warning at 60s
   useEffect(() => {
     if (isStarted && remainingSeconds === 60 && !timeWarningShown) {

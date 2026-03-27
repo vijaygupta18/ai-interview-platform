@@ -85,6 +85,28 @@ async function generateScorecardInBackground(id: string, interview: any) {
     await updateInterview(id, { scorecard });
     completeScoring(id);
     console.log(`[Auto-Score] Scorecard saved for interview ${id}`);
+
+    // Send email notification to interviewer
+    try {
+      const { pool } = await import("@/lib/db");
+      const { sendInterviewComplete } = await import("@/lib/email");
+      const { rows: userRows } = await pool.query(
+        "SELECT u.email, u.name FROM users u JOIN interviews i ON u.id = i.created_by WHERE i.id = $1",
+        [id]
+      );
+      if (userRows.length > 0 && userRows[0].email) {
+        const reviewUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL}/review/${id}`;
+        const candidateLabel = interview.candidateName || interview.candidateEmail || "A candidate";
+        await sendInterviewComplete(
+          userRows[0].email,
+          userRows[0].name || "",
+          candidateLabel,
+          reviewUrl
+        );
+      }
+    } catch (emailErr) {
+      console.error("[Auto-Score] Failed to send notification email:", emailErr);
+    }
   } catch (err) {
     failScoring(id, (err as Error).message);
     console.error(`[Auto-Score] Failed for interview ${id}:`, err);

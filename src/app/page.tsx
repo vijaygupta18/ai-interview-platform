@@ -215,6 +215,28 @@ export default function DashboardPage() {
     }
   };
 
+  const exportCSV = () => {
+    const headers = ["Candidate", "Email", "Role", "Level", "Status", "Score", "Recommendation", "Date"];
+    const rows = filtered.map((i: any) => [
+      i.candidateName || i.candidateEmail?.split("@")[0] || "Unknown",
+      i.candidateEmail || "",
+      i.role,
+      i.level,
+      i.status,
+      i.scorecard?.overall ?? "",
+      i.scorecard?.recommendation ?? "",
+      i.createdAt ? new Date(i.createdAt).toLocaleDateString() : "",
+    ]);
+    const csv = [headers, ...rows].map(r => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `interviews_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const SortIcon = ({ field }: { field: SortField }) => (
     <svg
       className={`w-3.5 h-3.5 ml-1 inline-block transition-transform ${sortField === field ? "text-indigo-600" : "text-gray-400"} ${sortField === field && sortDir === "asc" ? "rotate-180" : ""}`}
@@ -358,6 +380,17 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
+
+          <button
+            onClick={exportCSV}
+            disabled={filtered.length === 0}
+            className="btn-secondary flex items-center gap-2 text-xs whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export CSV
+          </button>
         </div>
 
         {/* Content */}

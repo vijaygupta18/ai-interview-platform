@@ -3,6 +3,7 @@ import { getInterview, addTranscriptEntry, getProctoringViolationCount, updateIn
 import { getAIResponse } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateAccessPost } from "@/lib/auth-check";
+import { pool } from "@/lib/db";
 
 // Combined AI response + TTS in ONE endpoint
 // Returns audio directly — no separate TTS call needed
@@ -34,6 +35,26 @@ export async function POST(req: Request) {
     if (violations >= MAX_STRIKES) {
       await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
       return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });
+    }
+
+    // Check proctoring heartbeat — flag if no heartbeat for >45s
+    const { rows: hbRows } = await pool.query(
+      "SELECT last_heartbeat_at FROM interviews WHERE id = $1",
+      [interviewId]
+    );
+    if (hbRows.length > 0 && hbRows[0].last_heartbeat_at) {
+      const lastHb = new Date(hbRows[0].last_heartbeat_at).getTime();
+      const elapsed = Date.now() - lastHb;
+      if (elapsed > 45000) {
+        // Heartbeat missing — proctoring may be disabled, log it
+        const { addProctoringEvent } = await import("@/lib/store");
+        await addProctoringEvent(interviewId, {
+          type: "heartbeat_missing",
+          severity: "flag",
+          message: `No proctoring heartbeat for ${Math.round(elapsed / 1000)}s`,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     // Save candidate message (skip for watchdog-triggered calls to avoid polluting transcript)

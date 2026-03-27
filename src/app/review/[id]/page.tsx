@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
 interface ScoreItem {
@@ -136,16 +136,19 @@ function SkeletonCard({ className = "" }: { className?: string }) {
 
 export default function ReviewPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const isShareMode = searchParams.get("share") === "true";
   const [data, setData] = useState<InterviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"evidence" | "proctoring" | "transcript">("evidence");
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`/api/interview/${id}`);
+        const res = await fetch(`/api/interview/${id}${isShareMode ? "?share=true" : ""}`);
         if (!res.ok) throw new Error("Interview not found");
         const json = await res.json();
 
@@ -314,6 +317,20 @@ export default function ReviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Rescore
+            </button>
+            <button
+              onClick={() => {
+                const shareUrl = `${window.location.origin}/review/${id}?share=true`;
+                navigator.clipboard.writeText(shareUrl);
+                setShareCopied(true);
+                setTimeout(() => setShareCopied(false), 2000);
+              }}
+              className="mt-1 btn-secondary text-xs !px-3 !py-1.5 inline-flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              {shareCopied ? "Copied!" : "Share"}
             </button>
           </div>
         </div>
