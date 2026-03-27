@@ -59,7 +59,7 @@ function getSTTProviderConfig() {
   const apiKey = process.env.DEEPGRAM_API_KEY || "";
   return {
     provider: "deepgram",
-    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=500&vad_events=true`,
+    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=800&vad_events=true`,
     protocols: ["token", apiKey],
     headers: {},
     params: {},
