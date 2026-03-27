@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS interviews (
     scorecard JSONB,
     scoring_status VARCHAR(20),       -- NULL, generating, completed, failed
     scoring_started_at TIMESTAMPTZ,
-    recording_url TEXT
+    recording_url TEXT,
+    last_heartbeat_at TIMESTAMP       -- proctoring heartbeat tracking
 );
 
 CREATE INDEX IF NOT EXISTS idx_interviews_org ON interviews(org_id);
@@ -110,7 +111,7 @@ CREATE TABLE IF NOT EXISTS proctoring_events (
 
     severity VARCHAR(20) NOT NULL,   -- flag, warning, info
     message TEXT NOT NULL,
-    photo TEXT,                       -- base64 encoded JPEG for photo captures
+    photo BYTEA,                      -- binary WebP for photo captures
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

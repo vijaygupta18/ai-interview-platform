@@ -1,1 +1,0 @@
-ALTER TABLE interviews ADD COLUMN IF NOT EXISTS last_heartbeat_at TIMESTAMP;
