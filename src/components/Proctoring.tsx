@@ -34,12 +34,38 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   const lastTabSwitchRef = useRef(0);
   const photoCountRef = useRef(0);
 
+  const captureViolationPhoto = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) return;
+    canvas.width = 160;
+    canvas.height = 120;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, 160, 120);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const formData = new FormData();
+      formData.append("interviewId", interviewId);
+      formData.append("type", "violation_photo");
+      formData.append("severity", "info");
+      formData.append("message", "Photo captured on violation");
+      formData.append("photo", blob, "violation.webp");
+      if (token) formData.append("token", token);
+      fetch("/api/proctor-event", { method: "POST", body: formData }).catch(() => {});
+    }, "image/webp", 0.3);
+  }, [videoRef, canvasRef, interviewId, token]);
+
   const alert = useCallback(
     (type: string, severity: string, message: string) => {
       onAlert({ type, severity, message });
       sendProctoringEvent(interviewId, type, severity, message, token);
+      // Capture photo evidence for flag-severity violations
+      if (severity === "flag") {
+        captureViolationPhoto();
+      }
     },
-    [onAlert, interviewId, token]
+    [onAlert, interviewId, token, captureViolationPhoto]
   );
 
   useEffect(() => { canvasRef.current = document.createElement("canvas"); }, []);
@@ -147,6 +173,104 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       document.removeEventListener("copy", blockClipboard);
       document.removeEventListener("paste", blockClipboard);
       document.removeEventListener("keydown", blockKey);
+    };
+  }, [enabled, alert]);
+
+  // Second monitor / extended display detection
+  useEffect(() => {
+    if (!enabled) return;
+    const checkMultipleScreens = () => {
+      // Method 1: screen.isExtended (Chrome 93+)
+      if ('isExtended' in window.screen && (window.screen as any).isExtended) {
+        alert("second_monitor", "flag", "Extended display detected — please use a single screen");
+        return;
+      }
+      // Method 2: Compare available screen size with window screen size
+      // If available width is much larger than screen width, likely multiple monitors
+      if (window.screen.availWidth > window.screen.width * 1.5) {
+        alert("second_monitor", "flag", "Multiple screens detected");
+        return;
+      }
+      // Method 3: Window Segments API (newer browsers)
+      if ('getWindowSegments' in window.visualViewport!) {
+        try {
+          const segments = (window.visualViewport as any).getWindowSegments();
+          if (segments && segments.length > 1) {
+            alert("second_monitor", "flag", "Multiple display segments detected");
+          }
+        } catch {}
+      }
+    };
+    // Check on mount and periodically (monitors can be connected during interview)
+    checkMultipleScreens();
+    const interval = setInterval(checkMultipleScreens, 30000);
+    return () => clearInterval(interval);
+  }, [enabled, alert]);
+
+  // DevTools detection
+  useEffect(() => {
+    if (!enabled) return;
+    let devtoolsOpen = false;
+
+    const checkDevTools = () => {
+      // Method 1: Window size difference — DevTools changes outerHeight/innerHeight ratio
+      const widthThreshold = window.outerWidth - window.innerWidth > 160;
+      const heightThreshold = window.outerHeight - window.innerHeight > 200;
+
+      if (widthThreshold || heightThreshold) {
+        if (!devtoolsOpen) {
+          devtoolsOpen = true;
+          alert("devtools_open", "flag", "Developer tools detected — please close them");
+        }
+      } else {
+        devtoolsOpen = false;
+      }
+    };
+
+    // Method 2: Console log timing detection
+    const checkConsole = () => {
+      const start = performance.now();
+      // debugger statement makes execution pause only when DevTools is open
+      // We use a safer approach: image with getter
+      const element = new Image();
+      Object.defineProperty(element, 'id', {
+        get: function() {
+          if (!devtoolsOpen) {
+            devtoolsOpen = true;
+            alert("devtools_open", "flag", "Developer tools detected — please close them");
+          }
+        }
+      });
+      console.log('%c', element as any);
+      console.clear();
+    };
+
+    const interval = setInterval(checkDevTools, 5000);
+    // Run console check less frequently
+    const consoleInterval = setInterval(checkConsole, 15000);
+
+    // Also block right-click context menu
+    const blockContext = (e: MouseEvent) => {
+      e.preventDefault();
+      alert("devtools_open", "info", "Right-click disabled during interview");
+    };
+    document.addEventListener("contextmenu", blockContext);
+
+    // Block F12 and Ctrl+Shift+I/J/C
+    const blockShortcuts = (e: KeyboardEvent) => {
+      if (e.key === "F12" ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && ["I","J","C","i","j","c"].includes(e.key))) {
+        e.preventDefault();
+        alert("devtools_open", "info", "Developer shortcuts blocked");
+      }
+    };
+    document.addEventListener("keydown", blockShortcuts);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(consoleInterval);
+      document.removeEventListener("contextmenu", blockContext);
+      document.removeEventListener("keydown", blockShortcuts);
     };
   }, [enabled, alert]);
 

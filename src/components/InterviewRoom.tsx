@@ -723,6 +723,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return () => clearTimeout(timer);
   }, [showProctoringBan, interviewId]);
 
+  // Strike decay — reduce accumulated warnings by 0.5 every 5 minutes
+  // This prevents early false positives from permanently harming the candidate
+  useEffect(() => {
+    if (!isStarted) return;
+    const decay = setInterval(() => {
+      setProctoringWarnings((prev) => Math.max(0, prev - 0.5));
+    }, 5 * 60 * 1000); // every 5 minutes
+    return () => clearInterval(decay);
+  }, [isStarted]);
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
