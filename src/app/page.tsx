@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import ReactDOM from "react-dom";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -87,20 +88,11 @@ function DateRangePicker({ from, to, onChange }: {
   const [tempFrom, setTempFrom] = useState(from);
   const [tempTo, setTempTo] = useState(to);
   const [viewMonth, setViewMonth] = useState(new Date());
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement | null>(null);
 
-  // Sync external prop changes
   useEffect(() => { setTempFrom(from); }, [from]);
   useEffect(() => { setTempTo(to); }, [to]);
-
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   // Generate calendar days for current month view
   const getDays = () => {
@@ -164,28 +156,21 @@ function DateRangePicker({ from, to, onChange }: {
       ? `${formatDateLabel(tempFrom)} \u2014 ...`
       : "Date range";
 
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-all duration-200 ${
-          tempFrom ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
-        }`}
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        <span>{label}</span>
-        {tempFrom && (
-          <span
-            onClick={(e) => { e.stopPropagation(); setTempFrom(""); setTempTo(""); onChange("", ""); }}
-            className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
-          >&times;</span>
-        )}
-      </button>
+  const handleOpen = () => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(true);
+  };
 
-      {open && (
-        <div className="absolute top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl p-4 w-72 animate-fade-in">
+  const calendar = open ? ReactDOM.createPortal(
+    <>
+      <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
+      <div
+        className="bg-white rounded-xl border border-gray-200 shadow-2xl p-4"
+        style={{ position: "fixed", zIndex: 9999, top: pos.top, left: pos.left, width: 288 }}
+      >
           {/* Month navigation */}
           <div className="flex items-center justify-between mb-3">
             <button onClick={prevMonth} className="p-1 rounded hover:bg-gray-100 transition-colors">
@@ -247,7 +232,31 @@ function DateRangePicker({ from, to, onChange }: {
             ))}
           </div>
         </div>
-      )}
+    </>,
+    document.body
+  ) : null;
+
+  return (
+    <div>
+      <button
+        ref={btnRef}
+        onClick={handleOpen}
+        className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-all duration-200 whitespace-nowrap ${
+          tempFrom ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+        }`}
+      >
+        <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span>{label}</span>
+        {tempFrom && (
+          <span
+            onClick={(e) => { e.stopPropagation(); setTempFrom(""); setTempTo(""); onChange("", ""); }}
+            className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+          >&times;</span>
+        )}
+      </button>
+      {calendar}
     </div>
   );
 }
