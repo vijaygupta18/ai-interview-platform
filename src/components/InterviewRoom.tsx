@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSTT } from "@/hooks/useSTT";
 import { AudioRecorder } from "./AudioRecorder";
 import { ScreenShare } from "./ScreenShare";
 import Proctoring from "./Proctoring";
@@ -27,21 +28,6 @@ interface ProctoringAlert {
   type: string;
   message: string;
   timestamp: number;
-}
-
-// Detect if STT text is echo of AI's voice (mic picking up speakers)
-function isEchoOfAI(sttText: string, aiText: string): boolean {
-  if (!sttText || !aiText) return false;
-  const stt = sttText.toLowerCase().trim();
-  const ai = aiText.toLowerCase().trim();
-  if (stt.length < 5) return false;
-  // Check if STT text is a substring of AI text (exact echo)
-  if (ai.includes(stt) || stt.includes(ai.substring(0, Math.min(ai.length, 50)))) return true;
-  // Check word overlap — if >60% of STT words are in AI text, it's echo
-  const sttWords = stt.split(/\s+/);
-  const aiWords = new Set(ai.split(/\s+/));
-  const overlap = sttWords.filter(w => aiWords.has(w)).length;
-  return sttWords.length > 2 && overlap / sttWords.length > 0.6;
 }
 
 // Send critical frontend logs to server for debugging
@@ -81,8 +67,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [isEnding, setIsEnding] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [expired, setExpired] = useState(false);
-  const [sttConnected, setSttConnected] = useState(false);
-  const [sttEverConnected, setSttEverConnected] = useState(false);
 
   // Pre-interview checks
   const [cameraReady, setCameraReady] = useState(false);
@@ -99,23 +83,17 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   }, []);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const dgSocketRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const sttProviderRef = useRef<string>("deepgram");
   const isProcessingRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const finalTranscriptBufferRef = useRef("");
   const isEndingRef = useRef(false);
   const isAISpeakingRef = useRef(false);
   const currentAITextRef = useRef("");
   const speakTextRef = useRef<(text: string) => Promise<void>>();
   const needsResumeRef = useRef(false);
-  const reconnectCountRef = useRef(0);
   const tokenRef = useRef("");
 
   const supportsFullscreen = typeof document !== "undefined" && typeof document.documentElement.requestFullscreen === "function";
@@ -269,7 +247,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           needsResumeRef.current = false;
           console.log("[Interview] Media ready — resuming STT...");
           // Small delay to ensure everything is wired up
-          setTimeout(() => startDeepgramSTT(), 500);
+          setTimeout(() => stt.start(), 500);
         }
 
         // Audio level monitoring
@@ -387,10 +365,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }
 
       // Stop STT/recording first so no new speech comes in
-      if (mediaRecorderRef.current?.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
-      dgSocketRef.current?.close();
+      stt.stop();
 
       // Send time-up note to AI for a goodbye message
       try {
@@ -646,301 +621,29 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return () => clearInterval(watchdog);
   }, [isStarted, isAISpeaking, interimTranscript, micEnabled, getAIResponse, transcript]);
 
-  const startDeepgramSTT = useCallback(async () => {
-    const stream = mediaStreamRef.current;
-    if (!stream) return;
-
-    // Clean up any existing connection before creating a new one
-    if (dgSocketRef.current) {
-      try { dgSocketRef.current.close(); } catch {}
-      dgSocketRef.current = null;
-    }
-    if (mediaRecorderRef.current?.state === "recording") {
-      try { mediaRecorderRef.current.stop(); } catch {}
-      mediaRecorderRef.current = null;
-    }
-
-    // Connect to our server-side STT WebSocket proxy (no API keys in browser)
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/stt-ws?token=${tokenRef.current}`;
-
-    // Fetch provider info for message parsing
-    try {
-      const sttRes = await fetch(`/api/stt-proxy?token=${tokenRef.current}`);
-      if (sttRes.ok) {
-        const sttConfig = await sttRes.json();
-        sttProviderRef.current = sttConfig.provider;
-      }
-    } catch {}
-
-    const dgSocket = new WebSocket(wsUrl);
-    dgSocketRef.current = dgSocket;
-
-    dgSocket.onopen = () => {
-      reconnectCountRef.current = 0;
-      setSttConnected(true);
-      setSttEverConnected(true);
-      // Extract audio-only stream for MediaRecorder
-      const audioTracks = stream.getAudioTracks();
-      if (audioTracks.length === 0) {
-        console.error("No audio tracks available");
-        return;
-      }
-      const audioStream = new MediaStream(audioTracks);
-
-      // Find a supported audio mimeType
-      const mimeTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
-      const mimeType = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m));
-
-      let mediaRecorder: MediaRecorder;
-      try {
-        mediaRecorder = mimeType
-          ? new MediaRecorder(audioStream, { mimeType })
-          : new MediaRecorder(audioStream);
-      } catch (err) {
-        console.error("MediaRecorder creation failed, trying without options:", err);
-        mediaRecorder = new MediaRecorder(audioStream);
-      }
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => {
-        if (dgSocket.readyState === WebSocket.OPEN && e.data.size > 0) {
-          dgSocket.send(e.data);
-        }
-      };
-      mediaRecorder.start(250);
-    };
-
-    dgSocket.onmessage = async (msg) => {
-      // WebSocket proxy may send data as Blob or string
-      let raw: string;
-      if (msg.data instanceof Blob) {
-        raw = await msg.data.text();
-      } else {
-        raw = msg.data;
-      }
-      let data: any;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        return; // skip non-JSON messages (binary audio, ping, etc.)
-      }
-
-      // Provider-aware transcript parsing
-      let text: string | undefined;
-      let isFinal: boolean | undefined;
-      let speechFinal: boolean | undefined;
-
-      if (sttProviderRef.current === "sarvam") {
-        text = data.transcript || data.text || "";
-        isFinal = data.is_final ?? data.final ?? true;
-        speechFinal = data.speech_final ?? data.final ?? true;
-      } else {
-        // Deepgram format
-        if (data.type !== "Results") return;
-        const alt = data.channel?.alternatives?.[0];
-        if (!alt) return;
-        text = alt.transcript;
-        isFinal = data.is_final;
-        speechFinal = data.speech_final;
-      }
-
-      // Multiple voice detection via Deepgram diarization
-      if (sttProviderRef.current === "deepgram" && data.channel?.alternatives?.[0]?.words) {
-        const words = data.channel.alternatives[0].words;
-        const speakers = new Set(words.map((w: any) => w.speaker).filter((s: any) => s !== undefined));
-        if (speakers.size > 1) {
-          onProctoringEvent({ type: "multiple_voices", severity: "flag", message: "Multiple voices detected — possible external assistance" });
-        }
-      }
-
-      {
-        // During AI speech: filter echo (mic picking up AI's voice from speakers)
-        if (isAISpeakingRef.current) {
-          if (!text || text.trim().length <= 3) return; // skip noise
-          // Check if this is echo of what the AI is currently saying
-          const currentAI = currentAITextRef?.current || "";
-          if (isEchoOfAI(text, currentAI)) {
-            console.log("[STT] Echo filtered:", text.substring(0, 40));
-            return;
-          }
-          // Not echo — real interrupt from candidate
-          console.log("[Interrupt] Candidate speaking over AI — stopping playback");
-          if (currentAudioRef.current) {
-            currentAudioRef.current.pause();
-            currentAudioRef.current = null;
-          }
-          setIsAISpeaking(false);
-          isAISpeakingRef.current = false;
-          setCurrentAIText("");
-        }
-
-        console.log("[STT]", { text: text?.substring(0, 50), isFinal, speechFinal });
-
-        if (isFinal && text) {
-          finalTranscriptBufferRef.current += (finalTranscriptBufferRef.current ? " " : "") + text;
-          setInterimTranscript("");
-
-          // Clear any existing silence timer on new speech
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-          // Trigger AI response either on speech_final OR after 2.5s of no new finals
-          const triggerAI = () => {
-            const candidateText = finalTranscriptBufferRef.current.trim();
-            if (!candidateText) return;
-            finalTranscriptBufferRef.current = "";
-            console.log("[STT] Triggering AI response for:", candidateText);
-
-            const entry: TranscriptEntry = {
-              role: "candidate",
-              text: candidateText,
-              timestamp: Date.now(),
-            };
-            setTranscript((prev) => {
-              const updated = [...prev, entry];
-              getAIResponse(updated);
-              return updated;
-            });
-          };
-
-          if (speechFinal) {
-            // Speech ended — trigger after short delay
-            silenceTimerRef.current = setTimeout(triggerAI, 50);
-          } else {
-            // Not speech_final yet — use longer timeout as fallback
-            silenceTimerRef.current = setTimeout(triggerAI, 1500);
-          }
-        } else if (!isFinal && text) {
-          setInterimTranscript(text);
-          // Reset silence timer on interim results too
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        }
-      }
-    };
-
-    dgSocket.onerror = (err) => {
-      console.error("Deepgram error:", err);
-    };
-
-    dgSocket.onclose = () => {
-      console.log("[STT] Connection closed, attempting reconnect...");
-      setSttConnected(false);
-      // Only reconnect if interview is still active and under max retries
-      if (isStarted && !isEndingRef.current && reconnectCountRef.current < 5) {
-        reconnectCountRef.current++;
-        const delay = 2000 * reconnectCountRef.current; // exponential backoff
-        console.log(`[STT] Reconnecting in ${delay}ms (attempt ${reconnectCountRef.current}/5)...`);
-        setTimeout(() => {
-          startDeepgramSTT();
-        }, delay);
-      }
-    };
-  }, [getAIResponse, isStarted]);
-
-  // Browser Speech API STT (free, zero latency, no API key)
-  const browserRecognitionRef = useRef<any>(null);
-  const startBrowserSTT = useCallback(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return false;
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-IN";
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        console.log("[STT] Browser Speech API started");
-        setSttConnected(true);
-        setSttEverConnected(true);
-        sttProviderRef.current = "browser";
-      };
-
-      recognition.onresult = (event: any) => {
-        const result = event.results[event.results.length - 1];
-        const text = result[0].transcript;
-        // Only update activity timer if there's actual speech (not empty results)
-        if (text && text.trim()) lastActivityRef.current = Date.now();
-        const isFinal = result.isFinal;
-
-        // During AI speech: filter echo
-        if (isAISpeakingRef.current) {
-          if (!isFinal || text.trim().length <= 3) return;
-          const currentAI = currentAITextRef?.current || "";
-          if (isEchoOfAI(text, currentAI)) {
-            console.log("[STT] Echo filtered:", text.substring(0, 40));
-            return;
-          }
-          // Real interrupt
-          if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
-          setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
-        }
-
-        if (!isFinal) {
-          setInterimTranscript(text);
-          return;
-        }
-
-        setInterimTranscript("");
-        finalTranscriptBufferRef.current += (finalTranscriptBufferRef.current ? " " : "") + text;
-
-        // Reset timer on every final — wait 500ms of silence before sending to AI
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => {
-          const candidateText = finalTranscriptBufferRef.current.trim();
-          if (!candidateText) return;
-          finalTranscriptBufferRef.current = "";
-          const entry: TranscriptEntry = { role: "candidate", text: candidateText, timestamp: Date.now() };
-          setTranscript((prev) => { const updated = [...prev, entry]; getAIResponse(updated); return updated; });
-        }, 500);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn("[STT] Browser Speech API error:", event.error);
-        if (event.error === "not-allowed" || event.error === "service-not-available") {
-          // Fall back to Deepgram
-          console.log("[STT] Falling back to Deepgram...");
-          setSttConnected(false);
-          startDeepgramSTT();
-        }
-      };
-
-      recognition.onend = () => {
-        console.log("[STT] Browser Speech API ended, restarting...");
-        setSttConnected(false);
-        // Auto-restart if interview is still active
-        if (isStarted && !isEndingRef.current) {
-          setTimeout(() => {
-            try {
-              recognition.start();
-              setSttConnected(true);
-            } catch (err) {
-              console.error("[STT] Browser restart failed, falling back to Deepgram");
-              serverLog("error", "Browser STT restart failed, falling back to Deepgram", interviewId);
-              startDeepgramSTT();
-            }
-          }, 300); // Small delay before restart
-        }
-      };
-
-      recognition.start();
-      browserRecognitionRef.current = recognition;
-      return true;
-    } catch (err) {
-      console.warn("[STT] Browser Speech API failed:", err);
-      return false;
-    }
-  }, [getAIResponse, isStarted]);
-
-  // Start STT — use Deepgram (reliable) as primary
-  // Browser Speech API was tested but is unreliable (stops randomly, restart fails)
-  const beginListening = useCallback(() => {
-    console.log("[Interview] Using Deepgram STT via WebSocket proxy");
-    startDeepgramSTT();
-  }, [startDeepgramSTT]);
-
-  // Resume STT is now handled in the media setup useEffect via needsResumeRef
+  // ─── STT Hook ──────────────────────────────────────────────────────────────
+  const stt = useSTT({
+    providers: ["deepgram", "browser"],
+    interviewId,
+    token: tokenRef.current,
+    isAISpeaking: isAISpeakingRef,
+    isStarted,
+    isEnding: isEndingRef,
+    onInterim: (text) => {
+      setInterimTranscript(text);
+      if (text.trim()) lastActivityRef.current = Date.now();
+    },
+    onComplete: (candidateText) => {
+      setInterimTranscript("");
+      lastActivityRef.current = Date.now();
+      const entry: TranscriptEntry = { role: "candidate", text: candidateText, timestamp: Date.now() };
+      setTranscript((prev) => {
+        const updated = [...prev, entry];
+        getAIResponse(updated);
+        return updated;
+      });
+    },
+  });
 
   const handleStartInterview = useCallback(async () => {
     // Request fullscreen
@@ -973,8 +676,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     console.log("[Interview] AI finished speaking, starting STT...");
 
     // Start STT after AI finishes speaking
-    beginListening();
-  }, [getAIResponse, beginListening, interviewData, interviewId]);
+    stt.start();
+  }, [getAIResponse, stt, interviewData, interviewId]);
 
   const handleEndInterview = useCallback(async () => {
     if (isEndingRef.current) return;
@@ -983,10 +686,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setShowEndConfirm(false);
 
     // Stop STT
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-    dgSocketRef.current?.close();
+    stt.stop();
     if (timerRef.current) clearInterval(timerRef.current);
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -1092,8 +792,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     if (!showProctoringBan || isEndingRef.current) return;
     const timer = setTimeout(() => {
       // End interview
-      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
-      dgSocketRef.current?.close();
+      stt.stop();
       if (timerRef.current) clearInterval(timerRef.current);
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
       fetch(`/api/interview/${interviewId}/end`, { method: "POST" }).catch(console.error);
@@ -1473,8 +1172,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         <div className="flex items-center gap-3">
           {/* STT Connection Status */}
           <div className="flex items-center gap-1.5">
-            <span className={`inline-flex h-2 w-2 rounded-full ${sttConnected ? "bg-green-500" : sttEverConnected ? "bg-red-500" : "bg-yellow-500"}`} />
-            {!sttConnected && sttEverConnected && (
+            <span className={`inline-flex h-2 w-2 rounded-full ${stt.connected ? "bg-green-500" : stt.everConnected ? "bg-red-500" : "bg-yellow-500"}`} />
+            {!stt.connected && stt.everConnected && (
               <span className="text-xs text-red-400">Reconnecting...</span>
             )}
           </div>

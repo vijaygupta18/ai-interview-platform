@@ -315,7 +315,7 @@ export async function generateScorecard(interview: Interview): Promise<string> {
   const transcriptMessages = interview.transcript.length;
   const candidateMessages = interview.transcript.filter(e => e.role === "candidate").length;
 
-  const scorecardPrompt = `You are a senior hiring manager evaluating an interview for a ${interview.level} ${interview.role} position. Candidate: ${candidateName}. Focus areas: ${interview.focusAreas.join(", ")}.
+  const scorecardPrompt = `You are an interviewer evaluating a candidate for a ${interview.level} ${interview.role} position. Candidate: ${candidateName}. Focus areas: ${interview.focusAreas.join(", ")}.
 
 INTERVIEW CONTEXT:
 - This was a ${interviewDurationMin} minute voice interview conducted via speech-to-text (STT)
@@ -361,7 +361,7 @@ SCORING APPROACH:
 
 RECOMMENDATION GUIDE:
 - strong_hire: overall >= 4 AND no dimension below 3. Clearly exceeds the ${interview.level} bar.
-- hire: overall >= 3.5 AND no dimension below 2. Meets the bar for ${interview.level} ${interview.role}.
+- hire: overall >= 3 AND no dimension below 2. Meets the bar for ${interview.level} ${interview.role}.
 - no_hire: overall < 3 OR any critical dimension below 2. Doesn't meet the ${interview.level} bar.
 - strong_no_hire: overall < 2 OR fundamental dishonesty/inability to answer basic questions.
 
