@@ -220,15 +220,9 @@ async function main() {
       }
     });
   } else {
-    // Production: use the standalone Next.js server handler
-    const nextServer = require("./server.js");
-    // The standalone server.js sets up its own HTTP server
-    // We need to intercept and add WS proxy before it starts listening
-    // Approach: override the server creation
-    const NextNodeServer = require("next/dist/server/next-server").default;
+    // Production: use Next.js standalone server handler
     const conf = require("./.next/required-server-files.json");
-
-    process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(conf.config);
+    const NextNodeServer = require("next/dist/server/next-server").default;
 
     const nextApp = new NextNodeServer({
       hostname,
@@ -236,11 +230,13 @@ async function main() {
       dir: __dirname,
       dev: false,
       customServer: true,
-      conf: conf.config,
+      conf: {
+        ...conf.config,
+        distDir: ".next",
+      },
     });
 
     const handler = nextApp.getRequestHandler();
-    await nextApp.prepare();
 
     server = createServer(async (req, res) => {
       try {
