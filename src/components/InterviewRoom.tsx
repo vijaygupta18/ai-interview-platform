@@ -515,7 +515,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }, 30000);
 
       try {
-        // Streaming AI + TTS pipeline — first audio plays while rest generates
+        // Streaming AI + TTS pipeline
         const res = await fetch("/api/ai-speak-stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -523,7 +523,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         });
 
         if (!res.ok || !res.body) {
-          // Fallback to non-streaming endpoint
+          // Fallback to non-streaming
           const fallbackRes = await fetch("/api/ai-speak", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -538,8 +538,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               const audioUrl = URL.createObjectURL(audioBlob);
               const audio = new Audio(audioUrl);
               currentAudioRef.current = audio;
-              setIsAISpeaking(true); isAISpeakingRef.current = true;
-              setCurrentAIText(data.text);
+              setIsAISpeaking(true); isAISpeakingRef.current = true; setCurrentAIText(data.text);
               await new Promise<void>((resolve) => {
                 audio.onended = () => { setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText(""); URL.revokeObjectURL(audioUrl); resolve(); };
                 audio.onerror = () => { setIsAISpeaking(false); isAISpeakingRef.current = false; URL.revokeObjectURL(audioUrl); resolve(); };
@@ -550,13 +549,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           return;
         }
 
-        // Parse SSE stream — play audio chunks as they arrive
+        // Parse SSE stream — play audio chunks in order
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let sseBuffer = "";
         let fullText = "";
-        const audioMap = new Map<number, { audio: string; contentType: string }>(); // idx → audio (may arrive out of order)
-        let nextPlayIdx = 0; // play in order: 0, 1, 2, ...
+        const audioMap = new Map<number, { audio: string; contentType: string }>();
+        let nextPlayIdx = 0;
         let isPlaying = false;
         let transcriptAdded = false;
         let streamDone = false;
@@ -573,13 +572,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             const audioUrl = URL.createObjectURL(audioBlob);
             const audio = new Audio(audioUrl);
             currentAudioRef.current = audio;
-
-            if (!isAISpeakingRef.current) {
-              setIsAISpeaking(true);
-              isAISpeakingRef.current = true;
-              setIsAIThinking(false);
-            }
-
+            if (!isAISpeakingRef.current) { setIsAISpeaking(true); isAISpeakingRef.current = true; setIsAIThinking(false); }
             await new Promise<void>((resolve) => {
               audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve(); };
               audio.onerror = () => { URL.revokeObjectURL(audioUrl); resolve(); };
@@ -587,81 +580,38 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             });
           } catch {}
           isPlaying = false;
-          // Play next idx if available
           if (audioMap.has(nextPlayIdx)) playNext();
           else if (streamDone && audioMap.size === 0) {
-            // All audio played
-            setIsAISpeaking(false);
-            isAISpeakingRef.current = false;
-            setCurrentAIText("");
-            currentAudioRef.current = null;
+            setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText(""); currentAudioRef.current = null;
           }
         };
 
-        // Read SSE stream
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           sseBuffer += decoder.decode(value, { stream: true });
           const lines = sseBuffer.split("\n");
           sseBuffer = lines.pop() || "";
-
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             try {
               const data = JSON.parse(line.slice(6));
-
               if (data.type === "text") {
                 fullText += (fullText ? " " : "") + data.text;
                 setCurrentAIText(fullText);
-                // Add transcript entry on first text
-                if (!transcriptAdded) {
-                  transcriptAdded = true;
-                  setTranscript((prev) => [...prev, { role: "ai", text: data.text, timestamp: Date.now() }]);
-                } else {
-                  // Update last transcript entry with accumulated text
-                  setTranscript((prev) => {
-                    const updated = [...prev];
-                    if (updated.length > 0 && updated[updated.length - 1].role === "ai") {
-                      updated[updated.length - 1] = { ...updated[updated.length - 1], text: fullText };
-                    }
-                    return updated;
-                  });
-                }
+                if (!transcriptAdded) { transcriptAdded = true; setTranscript((prev) => [...prev, { role: "ai", text: data.text, timestamp: Date.now() }]); }
+                else { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: fullText }; return u; }); }
               }
-
-              if (data.type === "audio") {
-                audioMap.set(data.idx, { audio: data.audio, contentType: data.contentType });
-                playNext(); // Play next in order if ready
-              }
-
-              if (data.type === "done") {
-                // Final text
-                if (data.fullText) {
-                  setTranscript((prev) => {
-                    const updated = [...prev];
-                    if (updated.length > 0 && updated[updated.length - 1].role === "ai") {
-                      updated[updated.length - 1] = { ...updated[updated.length - 1], text: data.fullText };
-                    }
-                    return updated;
-                  });
-                }
-              }
+              if (data.type === "audio") { audioMap.set(data.idx, { audio: data.audio, contentType: data.contentType }); playNext(); }
+              if (data.type === "done" && data.fullText) { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: data.fullText }; return u; }); }
             } catch {}
           }
         }
 
         streamDone = true;
-        // Wait for remaining audio to finish (max 20s to prevent hang)
         let waitCount = 0;
-        while ((audioMap.size > 0 || isPlaying) && waitCount < 200) {
-          await new Promise((r) => setTimeout(r, 100));
-          waitCount++;
-        }
-        setIsAISpeaking(false);
-        isAISpeakingRef.current = false;
-        setCurrentAIText("");
+        while ((audioMap.size > 0 || isPlaying) && waitCount < 200) { await new Promise((r) => setTimeout(r, 100)); waitCount++; }
+        setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
       } catch (err) {
         console.error("[AI] Response failed:", err);
         serverLog("error", "AI response failed", interviewId, { error: String(err) });
