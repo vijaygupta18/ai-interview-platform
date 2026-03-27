@@ -908,9 +908,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       };
 
       recognition.onresult = (event: any) => {
-        lastActivityRef.current = Date.now();
         const result = event.results[event.results.length - 1];
         const text = result[0].transcript;
+        // Only update activity timer if there's actual speech (not empty results)
+        if (text && text.trim()) lastActivityRef.current = Date.now();
         const isFinal = result.isFinal;
 
         // During AI speech: filter echo
