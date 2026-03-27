@@ -928,9 +928,20 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       };
 
       recognition.onend = () => {
+        console.log("[STT] Browser Speech API ended, restarting...");
+        setSttConnected(false);
         // Auto-restart if interview is still active
         if (isStarted && !isEndingRef.current) {
-          try { recognition.start(); } catch {}
+          setTimeout(() => {
+            try {
+              recognition.start();
+              setSttConnected(true);
+            } catch (err) {
+              console.error("[STT] Browser restart failed, falling back to Deepgram");
+              serverLog("error", "Browser STT restart failed, falling back to Deepgram", interviewId);
+              startDeepgramSTT();
+            }
+          }, 300); // Small delay before restart
         }
       };
 
