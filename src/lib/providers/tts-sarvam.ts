@@ -22,7 +22,7 @@ export class SarvamTTS implements TTSProvider {
         target_language_code: process.env.SARVAM_LANGUAGE || "en-IN",
         speaker: process.env.SARVAM_SPEAKER || "priya",
         model: "bulbul:v3",
-        pace: parseFloat(process.env.SARVAM_PACE || "1.2"),
+        pace: parseFloat(process.env.SARVAM_PACE || "1.15"),
       }),
     });
 
