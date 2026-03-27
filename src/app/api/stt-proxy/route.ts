@@ -11,7 +11,7 @@ export async function GET(req: Request) {
 
   // Only for in_progress interviews
   const { rows } = await pool.query(
-    "SELECT id FROM interviews WHERE token = $1 AND status = 'in_progress'",
+    "SELECT id FROM interviews WHERE token = $1 AND status IN ('in_progress', 'waiting')",
     [token]
   );
   if (rows.length === 0) {

@@ -309,7 +309,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         const vision = await import("@mediapipe/tasks-vision");
         const { FaceDetector, FilesetResolver } = vision;
         const filesetResolver = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm"
         );
         if (cancelled) return;
         // Try GPU first, then CPU

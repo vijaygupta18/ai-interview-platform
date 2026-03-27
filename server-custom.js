@@ -49,7 +49,7 @@ function addWSProxy(server) {
 
     if (!query.token) { socket.write("HTTP/1.1 401\r\n\r\n"); socket.destroy(); return; }
     try {
-      const { rows } = await pool.query("SELECT id FROM interviews WHERE token=$1 AND status='in_progress'", [query.token]);
+      const { rows } = await pool.query("SELECT id FROM interviews WHERE token=$1 AND status IN ('in_progress','waiting')", [query.token]);
       if (!rows.length) { socket.write("HTTP/1.1 403\r\n\r\n"); socket.destroy(); return; }
     } catch { socket.write("HTTP/1.1 500\r\n\r\n"); socket.destroy(); return; }
 
