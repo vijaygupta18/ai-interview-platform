@@ -3,9 +3,16 @@ import { getInterview, updateInterview } from "@/lib/store";
 import { generateScorecard } from "@/lib/ai";
 import { startScoring, completeScoring, failScoring } from "@/lib/scoring-tracker";
 import { normalizeScorecard } from "@/lib/normalize-scorecard";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { interviewId } = await req.json();
 
     if (!interviewId) {

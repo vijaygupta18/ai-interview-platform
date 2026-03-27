@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getInterview, addTranscriptEntry } from "@/lib/store";
+import { getInterview, addTranscriptEntry, getProctoringViolationCount, updateInterview } from "@/lib/store";
 import { getAIResponse } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateAccessPost } from "@/lib/auth-check";
@@ -26,6 +26,14 @@ export async function POST(req: Request) {
     const interview = await getInterview(interviewId);
     if (!interview) {
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+    }
+
+    // Server-side proctoring enforcement
+    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+    const violations = await getProctoringViolationCount(interviewId);
+    if (violations >= MAX_STRIKES) {
+      await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
+      return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });
     }
 
     // Save candidate message

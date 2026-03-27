@@ -76,7 +76,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const deepgramKeyRef = useRef<string>("");
+  const deepgramSttIdRef = useRef<string>("");
   const isProcessingRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -94,10 +94,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     async function init() {
       try {
         const tokenParam = tokenRef.current ? `?token=${tokenRef.current}` : "";
-        const [interviewRes, tokenRes] = await Promise.all([
-          fetch(`/api/interview/${interviewId}${tokenParam}`),
-          fetch(`/api/deepgram-token${tokenParam}`),
-        ]);
+        const interviewRes = await fetch(`/api/interview/${interviewId}${tokenParam}`);
         const interview = await interviewRes.json();
         // Check if interview link has expired
         if (interview.expired || (interview.expiresAt && new Date(interview.expiresAt) < new Date())) {
@@ -110,9 +107,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           window.location.href = `/completed/${interviewId}`;
           return;
         }
-        const tokenData = await tokenRes.json();
         setInterviewData(interview);
-        deepgramKeyRef.current = tokenData.key || tokenData.token;
+
+        // For resume (in_progress), STT key comes embedded in interview response
+        if (interview.status === "in_progress" && interview.deepgramSttId) {
+          deepgramSttIdRef.current = interview.deepgramSttId;
+        }
 
         // Resume interview if already started (in_progress OR has startedAt)
         const hasStarted = interview.status === "in_progress" || interview.startedAt || (interview.transcript?.length > 0);
@@ -441,11 +441,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   const startDeepgramSTT = useCallback(() => {
     const stream = mediaStreamRef.current;
-    if (!stream || !deepgramKeyRef.current) return;
+    if (!stream || !deepgramSttIdRef.current) return;
 
     const dgSocket = new WebSocket(
       "wss://api.deepgram.com/v1/listen?model=nova-2&language=en-IN&punctuate=true&interim_results=true&endpointing=2000&vad_events=true",
-      ["token", deepgramKeyRef.current]
+      ["token", deepgramSttIdRef.current]
     );
     dgSocketRef.current = dgSocket;
 
@@ -576,8 +576,20 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setRemainingSeconds(durationMinutes * 60);
     setIsStarted(true);
 
-    // Mark interview as in_progress with startedAt on server
-    fetch(`/api/interview/${interviewId}/start`, { method: "POST" }).catch(console.error);
+    // Mark interview as in_progress and get STT credentials
+    try {
+      const startRes = await fetch(`/api/interview/${interviewId}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenRef.current }),
+      });
+      const startData = await startRes.json();
+      if (startData.deepgramSttId) {
+        deepgramSttIdRef.current = startData.deepgramSttId;
+      }
+    } catch (err) {
+      console.error("Failed to start interview:", err);
+    }
 
     // Get AI opening message
     console.log("[Interview] Getting AI opening message...");
@@ -766,7 +778,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           <ul className="mt-4 space-y-2.5">
             {[
               "Video and audio recording",
-              "AI-powered proctoring (face detection, eye tracking, tab monitoring)",
+              "AI-powered proctoring (face detection, eye tracking, tab/window monitoring, periodic photo capture)",
               "Analysis of your responses by AI",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2.5 text-sm text-zinc-300">
@@ -780,6 +792,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               </li>
             ))}
           </ul>
+
+          <p className="mt-3 text-center text-xs leading-relaxed text-zinc-500">
+            Periodic photos will be captured during the interview for integrity verification. Photos are stored securely and automatically deleted after 90 days.
+          </p>
 
           {/* Environment Tips */}
           <div className="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3.5">

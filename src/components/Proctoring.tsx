@@ -61,41 +61,68 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, [enabled, alert]);
 
-  // Window focus loss detection (switching to another app/screen)
-  // Uses multiple methods to catch all cases on all OS/browsers
+  // Window focus loss detection — only counts sustained loss (>2s) to avoid OS notification false positives
   useEffect(() => {
     if (!enabled) return;
+    let blurStart = 0;
     let lastAlert = 0;
+    let shortBlurCount = 0;
+    let shortBlurResetTimer: NodeJS.Timeout | null = null;
 
-    const fireAlert = (source: string) => {
+    const fireAlert = (duration: number) => {
       const now = Date.now();
-      if (now - lastAlert > 5000) { // Debounce 5s across all methods
-        lastAlert = now;
-        alert("window_blur", "flag", `Candidate left the interview window (${source})`);
+      if (now - lastAlert < 5000) return; // 5s global debounce
+      lastAlert = now;
+      if (duration > 10000) {
+        alert("window_blur", "flag", `Candidate left the interview window for ${Math.round(duration / 1000)}s`);
+      } else {
+        alert("window_blur", "flag", `Candidate left the interview window briefly`);
       }
     };
 
-    // Method 1: window.blur — fires when window loses focus
-    const handleBlur = () => fireAlert("window blur");
-    window.addEventListener("blur", handleBlur);
-
-    // Method 2: document.visibilitychange — fires on tab switch AND some app switches
-    const handleVisibility = () => {
-      if (document.hidden) fireAlert("tab hidden");
+    const handleBlur = () => { blurStart = Date.now(); };
+    const handleFocus = () => {
+      if (!blurStart) return;
+      const duration = Date.now() - blurStart;
+      blurStart = 0;
+      if (duration > 2000) {
+        // Sustained loss >2s — definite flag
+        fireAlert(duration);
+      } else {
+        // Short blur — track frequency. 3+ short blurs in 60s = suspicious
+        shortBlurCount++;
+        if (shortBlurResetTimer) clearTimeout(shortBlurResetTimer);
+        shortBlurResetTimer = setTimeout(() => { shortBlurCount = 0; }, 60000);
+        if (shortBlurCount >= 3) {
+          fireAlert(duration);
+          shortBlurCount = 0;
+        }
+      }
     };
+
+    // Visibility change for tab switches (these are always intentional)
+    const handleVisibility = () => {
+      if (document.hidden) {
+        blurStart = Date.now();
+      } else if (blurStart) {
+        const duration = Date.now() - blurStart;
+        blurStart = 0;
+        if (duration > 2000) fireAlert(duration);
+      }
+    };
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Method 3: Periodic focus check — catches cases where blur/visibility don't fire
-    const focusCheck = setInterval(() => {
-      if (!document.hasFocus()) {
-        fireAlert("focus lost");
-      }
-    }, 3000);
+    // Periodic check removed — blur+visibility+focus cover all cases;
+    // periodic poll caused too many false positives from momentary focus loss
 
     return () => {
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
-      clearInterval(focusCheck);
+      if (shortBlurResetTimer) clearTimeout(shortBlurResetTimer);
     };
   }, [enabled, alert]);
 
@@ -188,28 +215,65 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     return () => clearInterval(interval);
   }, [enabled, videoRef, alert]);
 
-  // Periodic photo capture — every 60s
+  // Virtual camera detection
+  useEffect(() => {
+    if (!enabled) return;
+    (async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter(d => d.kind === "videoinput");
+        const virtualPatterns = /obs|virtual|manycam|camtwist|snap.?camera|xsplit|streamlabs|fake|droidcam/i;
+        for (const device of videoInputs) {
+          if (virtualPatterns.test(device.label)) {
+            alert("virtual_camera", "flag", `Virtual camera detected: ${device.label}`);
+            break;
+          }
+        }
+        // Also check active video track settings
+        const video = videoRef.current;
+        if (video?.srcObject) {
+          const track = (video.srcObject as MediaStream).getVideoTracks()[0];
+          if (track) {
+            const settings = track.getSettings();
+            // Virtual cameras often report 0 for deviceId or unusual frameRate
+            if (settings.frameRate && (settings.frameRate < 10 || settings.frameRate > 120)) {
+              alert("virtual_camera", "flag", "Unusual camera frame rate detected");
+            }
+          }
+        }
+      } catch {}
+    })();
+  }, [enabled, videoRef, alert]);
+
+  // Periodic photo capture — first at 30s, then every 2 min. WebP + binary upload for minimal size.
   useEffect(() => {
     if (!enabled) return;
     const capture = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas || video.readyState < 2) return;
-      canvas.width = 320;
-      canvas.height = 240;
+      canvas.width = 160;
+      canvas.height = 120;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.drawImage(video, 0, 0, 320, 240);
+      ctx.drawImage(video, 0, 0, 160, 120);
       photoCountRef.current++;
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
-      fetch("/api/proctor-event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interviewId, type: "photo_capture", severity: "info", message: `Photo #${photoCountRef.current}`, photo: dataUrl, token }),
-      }).catch(() => {});
+      const count = photoCountRef.current;
+      // Use WebP (30% smaller than JPEG), send as binary blob via FormData (no base64 overhead)
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const formData = new FormData();
+        formData.append("interviewId", interviewId);
+        formData.append("type", "photo_capture");
+        formData.append("severity", "info");
+        formData.append("message", `Photo #${count}`);
+        formData.append("photo", blob, `photo_${count}.webp`);
+        if (token) formData.append("token", token);
+        fetch("/api/proctor-event", { method: "POST", body: formData }).catch(() => {});
+      }, "image/webp", 0.3);
     };
     const first = setTimeout(capture, 30000);
-    const interval = setInterval(capture, 60000);
+    const interval = setInterval(capture, 120000);
     return () => { clearTimeout(first); clearInterval(interval); };
   }, [enabled, videoRef, interviewId]);
 

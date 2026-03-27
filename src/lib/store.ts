@@ -228,7 +228,7 @@ async function getProctoringEventsWithPhotos(interviewId: string): Promise<Proct
     severity: r.severity,
     message: r.message,
     timestamp: r.created_at?.toISOString(),
-    ...(r.photo ? { photo: r.photo } : {}),
+    ...(r.photo ? { photo: `data:image/webp;base64,${Buffer.isBuffer(r.photo) ? r.photo.toString("base64") : r.photo}` } : {}),
   }));
 }
 
@@ -322,9 +322,19 @@ export async function addTranscriptEntry(id: string, entry: TranscriptEntry): Pr
   );
 }
 
-export async function addProctoringEvent(id: string, event: ProctoringEvent & { photo?: string }): Promise<void> {
+export async function addProctoringEvent(id: string, event: ProctoringEvent & { photo?: string | Buffer }): Promise<void> {
+  let photoData: Buffer | null = null;
+  if (event.photo) {
+    if (Buffer.isBuffer(event.photo)) {
+      photoData = event.photo;
+    } else if (typeof event.photo === "string") {
+      // Strip data URL prefix if present, then decode base64 to binary
+      const base64 = event.photo.replace(/^data:[^;]+;base64,/, "");
+      photoData = Buffer.from(base64, "base64");
+    }
+  }
   await pool.query(
     "INSERT INTO proctoring_events (interview_id, type, severity, message, photo) VALUES ($1, $2, $3, $4, $5)",
-    [id, event.type, event.severity, event.message, event.photo || null]
+    [id, event.type, event.severity, event.message, photoData]
   );
 }
