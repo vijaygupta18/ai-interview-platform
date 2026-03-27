@@ -983,16 +983,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     }
   }, [getAIResponse, isStarted]);
 
-  // Start STT — try browser first, fall back to Deepgram
+  // Start STT — use Deepgram (reliable) as primary
+  // Browser Speech API was tested but is unreliable (stops randomly, restart fails)
   const beginListening = useCallback(() => {
-    const browserWorked = startBrowserSTT();
-    if (browserWorked) {
-      console.log("[Interview] Using Browser Speech API (free, zero latency)");
-    } else {
-      console.log("[Interview] Browser STT unavailable, using Deepgram");
-      startDeepgramSTT();
-    }
-  }, [startBrowserSTT, startDeepgramSTT]);
+    console.log("[Interview] Using Deepgram STT via WebSocket proxy");
+    startDeepgramSTT();
+  }, [startDeepgramSTT]);
 
   // Resume STT is now handled in the media setup useEffect via needsResumeRef
 
