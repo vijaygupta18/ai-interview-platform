@@ -38,6 +38,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [declined, setDeclined] = useState(false);
   const [isStarted, setIsStarted] = useState(false);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
+  const [isAIThinking, setIsAIThinking] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [timeWarningShown, setTimeWarningShown] = useState(false);
@@ -463,6 +464,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (isProcessingRef.current) return;
       if (isEndingRef.current) return;
       isProcessingRef.current = true;
+      setIsAIThinking(true);
       try {
         // Single combined endpoint: AI + TTS in one call
         const res = await fetch("/api/ai-speak", {
@@ -516,6 +518,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         console.error("AI response failed:", err);
       } finally {
         isProcessingRef.current = false;
+        setIsAIThinking(false);
       }
     },
     [interviewId, speakText]
@@ -606,9 +609,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     };
 
     dgSocket.onmessage = async (msg) => {
-      // Skip STT processing while AI is speaking (prevents echo feedback)
-      if (isAISpeakingRef.current) return;
-
       // WebSocket proxy may send data as Blob or string
       let raw: string;
       if (msg.data instanceof Blob) {
@@ -642,7 +642,30 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         speechFinal = data.speech_final;
       }
 
+      // Multiple voice detection via Deepgram diarization
+      if (sttProviderRef.current === "deepgram" && data.channel?.alternatives?.[0]?.words) {
+        const words = data.channel.alternatives[0].words;
+        const speakers = new Set(words.map((w: any) => w.speaker).filter((s: any) => s !== undefined));
+        if (speakers.size > 1) {
+          onProctoringEvent({ type: "multiple_voices", severity: "flag", message: "Multiple voices detected — possible external assistance" });
+        }
+      }
+
       {
+        // Interrupt: if candidate speaks while AI is talking, stop AI audio
+        if (isAISpeakingRef.current && text && text.trim().length > 3) {
+          console.log("[Interrupt] Candidate speaking over AI — stopping playback");
+          if (currentAudioRef.current) {
+            currentAudioRef.current.pause();
+            currentAudioRef.current = null;
+          }
+          setIsAISpeaking(false);
+          isAISpeakingRef.current = false;
+          setCurrentAIText("");
+        }
+
+        // Skip empty/noise during AI speech (short utterances < 3 chars are likely echo)
+        if (isAISpeakingRef.current && (!text || text.trim().length <= 3)) return;
 
         console.log("[STT]", { text: text?.substring(0, 50), isFinal, speechFinal });
 
@@ -841,6 +864,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         screen_share_stopped: 2,
         virtual_camera: 2,
         heartbeat_missing: 2,
+        multiple_voices: 2,
       };
       const effectiveSeverity = event.severity || "flag";
       const weight = strikeWeights[event.type] || 0;
@@ -1404,6 +1428,21 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                   </div>
                   <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-zinc-700/30 px-4 py-2.5">
                     <p className="text-sm italic leading-relaxed text-zinc-400">{interimTranscript}...</p>
+                  </div>
+                </div>
+              )}
+              {/* AI thinking indicator */}
+              {isAIThinking && !isAISpeaking && (
+                <div className="flex gap-3 animate-fade-in">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs font-bold">
+                    A
+                  </div>
+                  <div className="rounded-2xl rounded-tl-sm bg-blue-600/20 px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
                   </div>
                 </div>
               )}
