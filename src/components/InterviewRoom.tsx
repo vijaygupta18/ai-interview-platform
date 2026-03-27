@@ -88,6 +88,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Pre-interview checks
   const [cameraReady, setCameraReady] = useState(false);
   const [micReady, setMicReady] = useState(false);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const audioLevelRef = useRef(0);
 
   // Refs
@@ -253,6 +254,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           audio: true,
         });
         mediaStreamRef.current = stream;
+        setMediaStream(stream);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -1210,7 +1212,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               Refresh mic
             </button>
           </div>
-          <AudioRecorder interviewId={interviewId} mediaStream={mediaStreamRef.current} enabled={isStarted} />
+          <AudioRecorder interviewId={interviewId} mediaStream={mediaStream} enabled={isStarted} />
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
