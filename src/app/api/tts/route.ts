@@ -4,7 +4,9 @@ import { stripThinking } from "@/lib/ai";
 // Edge TTS via CLI — free, Indian female voice
 async function edgeTTS(text: string): Promise<Buffer | null> {
   try {
-    const { execFileSync } = await import("child_process");
+    const { execFile } = await import("child_process");
+    const { promisify } = await import("util");
+    const execFileAsync = promisify(execFile);
     const fs = await import("fs");
     const path = await import("path");
 
@@ -12,13 +14,13 @@ async function edgeTTS(text: string): Promise<Buffer | null> {
     const voice = process.env.EDGE_TTS_VOICE || "en-IN-NeerjaNeural";
     const rate = process.env.EDGE_TTS_RATE || "+10%";
 
-    execFileSync("edge-tts", [
+    await execFileAsync("edge-tts", [
       "--voice", voice,
       "--rate", rate,
       "--pitch=-6Hz",
       "--text", text,
       "--write-media", tmpFile,
-    ], { timeout: 15000, stdio: "pipe" });
+    ], { timeout: 15000 });
 
     const audioBuffer = fs.readFileSync(tmpFile);
     fs.unlinkSync(tmpFile);

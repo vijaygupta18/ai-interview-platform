@@ -30,6 +30,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   const faceDetectorRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastFaceTimeRef = useRef(Date.now());
+  const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
   const lastTabSwitchRef = useRef(0);
   const photoCountRef = useRef(0);
 
@@ -187,27 +188,33 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
           }
         } catch {}
       } else {
-        // Canvas fallback — skin tone heuristic
+        // Canvas fallback — motion-based presence detection (race-neutral alternative to skin-tone)
         canvas.width = 80;
         canvas.height = 60;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
         ctx.drawImage(video, 0, 0, 80, 60);
-        const centerData = ctx.getImageData(20, 10, 40, 30);
-        const pixels = centerData.data;
-        let skinPixels = 0;
-        for (let i = 0; i < pixels.length; i += 4) {
-          const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-          if (r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15 && r - b > 15) skinPixels++;
-        }
-        if (skinPixels / (40 * 30) < 0.05) {
-          if (Date.now() - lastFaceTimeRef.current > 10000) {
-            alert("face_missing", "flag", "Face not visible — please face the camera");
+        const currentData = ctx.getImageData(0, 0, 80, 60).data;
+        if (prevFrameRef.current) {
+          let changedPixels = 0;
+          const totalPixels = 80 * 60;
+          for (let i = 0; i < currentData.length; i += 4) {
+            const diff = Math.abs(currentData[i] - prevFrameRef.current[i]) +
+                         Math.abs(currentData[i+1] - prevFrameRef.current[i+1]) +
+                         Math.abs(currentData[i+2] - prevFrameRef.current[i+2]);
+            if (diff > 30) changedPixels++;
+          }
+          // If very little motion AND no face detected via FaceDetector, likely absent
+          if (changedPixels / totalPixels < 0.02) {
+            if (Date.now() - lastFaceTimeRef.current > 10000) {
+              alert("face_missing", "flag", "No movement detected — please face the camera");
+              lastFaceTimeRef.current = Date.now();
+            }
+          } else {
             lastFaceTimeRef.current = Date.now();
           }
-        } else {
-          lastFaceTimeRef.current = Date.now();
         }
+        prevFrameRef.current = new Uint8ClampedArray(currentData);
       }
     };
 

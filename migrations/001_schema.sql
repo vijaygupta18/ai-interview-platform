@@ -191,20 +191,8 @@ INSERT INTO organizations (id, name, slug)
 VALUES ('00000000-0000-0000-0000-000000000001', 'NammaYatri', 'nammayatri')
 ON CONFLICT (id) DO NOTHING;
 
--- Default admin user (password: admin123)
--- Generate hash: node -e "console.log(require('bcryptjs').hashSync('admin123', 10))"
-INSERT INTO users (id, org_id, email, name, password_hash, role)
-VALUES (
-    '00000000-0000-0000-0000-000000000002',
-    '00000000-0000-0000-0000-000000000001',
-    'admin@interview.ai',
-    'Admin',
-    '$2b$10$4KglSvNZZuvTkaIFQVQp3.dzDUbNYICWmi20rh//9BarDIygl73w2',
-    'admin'
-)
-ON CONFLICT (email) DO NOTHING;
+-- Create admin user via /register endpoint
 
 -- ============================================
 -- Done!
--- Login: admin@interview.ai / admin123
 -- ============================================

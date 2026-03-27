@@ -274,8 +274,8 @@ export async function getAIResponse(
     { role: "assistant", content: "Got it, I have the resume. Ready to begin the interview." },
   ];
 
-  const trimmedTranscript = transcript.length > 40
-    ? [...transcript.slice(0, 5), ...transcript.slice(-35)]
+  const trimmedTranscript = transcript.length > 80
+    ? [...transcript.slice(0, 5), ...transcript.slice(-75)]
     : transcript;
 
   for (const entry of trimmedTranscript) {

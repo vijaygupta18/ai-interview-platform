@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
-    const { interviewId, transcript, token } = await req.json();
+    const { interviewId, transcript, token, skipSave } = await req.json();
 
     if (!interviewId) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
@@ -36,8 +36,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });
     }
 
-    // Save candidate message
-    if (transcript?.length > 0) {
+    // Save candidate message (skip for watchdog-triggered calls to avoid polluting transcript)
+    if (!skipSave && transcript?.length > 0) {
       const lastEntry = transcript[transcript.length - 1];
       if (lastEntry.role === "candidate" && lastEntry.text) {
         await addTranscriptEntry(interviewId, {
@@ -68,13 +68,15 @@ export async function POST(req: Request) {
     // Try Edge TTS first if configured
     if (provider === "edge") {
       try {
-        const { execFileSync } = await import("child_process");
+        const { execFile } = await import("child_process");
+        const { promisify } = await import("util");
+        const execFileAsync = promisify(execFile);
         const fs = await import("fs");
         const path = await import("path");
         const tmpFile = path.join("/tmp", `_tts_${Date.now()}.mp3`);
         const voice = process.env.EDGE_TTS_VOICE || "en-IN-NeerjaNeural";
         const rate = process.env.EDGE_TTS_RATE || "+15%";
-        execFileSync("edge-tts", ["--voice", voice, "--rate", rate, "--pitch=-6Hz", "--text", cleanedText, "--write-media", tmpFile], { timeout: 15000, stdio: "pipe" });
+        await execFileAsync("edge-tts", ["--voice", voice, "--rate", rate, "--pitch=-6Hz", "--text", cleanedText, "--write-media", tmpFile], { timeout: 15000 });
         const buf = fs.readFileSync(tmpFile);
         fs.unlinkSync(tmpFile);
         audioBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
@@ -97,17 +99,12 @@ export async function POST(req: Request) {
     }
 
     if (!audioBuffer) {
-      return NextResponse.json({ text: aiText, audio: false });
+      return NextResponse.json({ text: aiText, audio: null, contentType: null });
     }
 
-    // Return both text and audio in one response
-    // Text in header, audio in body
-    return new NextResponse(audioBuffer, {
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "X-AI-Text": encodeURIComponent(aiText),
-      },
-    });
+    // Return both text and audio as JSON (base64-encoded audio)
+    const base64Audio = Buffer.from(audioBuffer).toString("base64");
+    return NextResponse.json({ audio: base64Audio, text: aiText, contentType: "audio/mpeg" });
   } catch (error) {
     console.error("AI speak error:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });

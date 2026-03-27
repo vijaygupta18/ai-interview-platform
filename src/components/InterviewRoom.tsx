@@ -363,7 +363,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   speakTextRef.current = speakText;
 
   const getAIResponse = useCallback(
-    async (currentTranscript: TranscriptEntry[]) => {
+    async (currentTranscript: TranscriptEntry[], options?: { skipSave?: boolean }) => {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true;
       try {
@@ -371,21 +371,22 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         const res = await fetch("/api/ai-speak", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ interviewId, transcript: currentTranscript, token: tokenRef.current }),
+          body: JSON.stringify({ interviewId, transcript: currentTranscript, token: tokenRef.current, skipSave: options?.skipSave }),
         });
 
-        const contentType = res.headers.get("Content-Type") || "";
+        const data = await res.json();
+        const aiText = data.text || "";
 
-        if (contentType.includes("audio")) {
-          // Got audio response — text is in header
-          const aiText = decodeURIComponent(res.headers.get("X-AI-Text") || "");
+        if (data.audio) {
+          // Got audio response — decode base64 audio
           const aiEntry: TranscriptEntry = { role: "ai", text: aiText, timestamp: Date.now() };
           setTranscript((prev) => [...prev, aiEntry]);
 
-          // Play audio immediately using streaming blob
+          // Play audio immediately from base64
           setIsAISpeaking(true);
           setCurrentAIText(aiText);
-          const audioBlob = await res.blob();
+          const audioBytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0));
+          const audioBlob = new Blob([audioBytes], { type: data.contentType || "audio/mpeg" });
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
           currentAudioRef.current = audio;
@@ -407,10 +408,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           });
         } else {
           // JSON fallback (no audio)
-          const { text } = await res.json();
-          const aiEntry: TranscriptEntry = { role: "ai", text, timestamp: Date.now() };
+          const aiEntry: TranscriptEntry = { role: "ai", text: aiText, timestamp: Date.now() };
           setTranscript((prev) => [...prev, aiEntry]);
-          await speakText(text);
+          await speakText(aiText);
         }
       } catch (err) {
         console.error("AI response failed:", err);
@@ -432,7 +432,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       // Only nudge if: 45s silence AND no interim speech AND AI not speaking AND not processing
       if (silenceSec > 45 && !interimTranscript && !isProcessingRef.current && !isAISpeaking) {
         console.log("[Watchdog] 45s silence, nudging AI...");
-        getAIResponse([...transcript, { role: "candidate", text: "(candidate is waiting)", timestamp: Date.now() }]);
+        getAIResponse([...transcript, { role: "candidate", text: "(candidate is waiting)", timestamp: Date.now() }], { skipSave: true });
         lastActivityRef.current = Date.now();
       }
     }, 10000);
@@ -681,12 +681,22 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }).catch(() => {});
       }
 
-      // Track violations — only "flag" severity events count as strikes (consistent with server-side getProctoringViolationCount)
-      const strikeTypes = ["face_missing", "multiple_faces", "screen_share_stopped", "phone_detected", "eye_away", "fullscreen_exit", "window_blur"];
+      // Track violations — weighted by severity (consistent with server-side getProctoringViolationCount)
+      const strikeWeights: Record<string, number> = {
+        face_missing: 0.5,
+        eye_away: 0.5,
+        fullscreen_exit: 1,
+        window_blur: 1,
+        phone_detected: 1.5,
+        multiple_faces: 1.5,
+        screen_share_stopped: 2,
+        virtual_camera: 2,
+      };
       const effectiveSeverity = event.severity || "flag";
-      if (strikeTypes.includes(event.type) && effectiveSeverity === "flag") {
+      const weight = strikeWeights[event.type] || 0;
+      if (weight > 0 && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
-          const next = prev + 1;
+          const next = prev + weight;
           const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
           if (next >= maxStrikes) {
             setShowProctoringBan(true);

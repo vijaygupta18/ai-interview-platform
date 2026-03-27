@@ -234,10 +234,24 @@ async function getProctoringEventsWithPhotos(interviewId: string): Promise<Proct
 
 export async function getProctoringViolationCount(interviewId: string): Promise<number> {
   const { rows } = await pool.query(
-    "SELECT count(*) FROM proctoring_events WHERE interview_id = $1 AND type IN ('face_missing','multiple_faces','screen_share_stopped','phone_detected','eye_away','fullscreen_exit','window_blur') AND severity = 'flag'",
+    `SELECT COALESCE(SUM(
+      CASE type
+        WHEN 'face_missing' THEN 0.5
+        WHEN 'eye_away' THEN 0.5
+        WHEN 'fullscreen_exit' THEN 1
+        WHEN 'window_blur' THEN 1
+        WHEN 'phone_detected' THEN 1.5
+        WHEN 'multiple_faces' THEN 1.5
+        WHEN 'screen_share_stopped' THEN 2
+        WHEN 'virtual_camera' THEN 2
+        ELSE 1
+      END
+    ), 0) as weighted_count
+    FROM proctoring_events WHERE interview_id = $1 AND severity = 'flag'
+    AND type IN ('face_missing','multiple_faces','screen_share_stopped','phone_detected','eye_away','fullscreen_exit','window_blur','virtual_camera')`,
     [interviewId]
   );
-  return parseInt(rows[0].count);
+  return parseFloat(rows[0].weighted_count);
 }
 
 export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, "resume">[]> {
@@ -248,39 +262,7 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
 
   if (rows.length === 0) return [];
 
-  const ids = rows.map((r) => r.id);
-
-  // Batch fetch all transcripts and proctoring events in two queries instead of N+1
-  const [transcriptResult, proctoringResult] = await Promise.all([
-    pool.query(
-      "SELECT interview_id, role, text, created_at FROM transcript_entries WHERE interview_id = ANY($1) ORDER BY id ASC",
-      [ids]
-    ),
-    pool.query(
-      "SELECT interview_id, type, severity, message, created_at FROM proctoring_events WHERE interview_id = ANY($1) ORDER BY id ASC",
-      [ids]
-    ),
-  ]);
-
-  const transcriptMap = new Map<string, TranscriptEntry[]>();
-  for (const r of transcriptResult.rows) {
-    const entries = transcriptMap.get(r.interview_id) || [];
-    entries.push({ role: r.role as "ai" | "candidate", text: r.text, timestamp: r.created_at?.toISOString() });
-    transcriptMap.set(r.interview_id, entries);
-  }
-
-  const proctoringMap = new Map<string, ProctoringEvent[]>();
-  for (const r of proctoringResult.rows) {
-    const events = proctoringMap.get(r.interview_id) || [];
-    events.push({
-      type: r.type,
-      severity: r.severity,
-      message: r.message,
-      timestamp: r.created_at?.toISOString(),
-    });
-    proctoringMap.set(r.interview_id, events);
-  }
-
+  // List endpoint only needs summary data — transcript and proctoring are fetched via getInterview for detail views
   return rows.map((row) => ({
     id: row.id,
     resume: "",
@@ -297,8 +279,8 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
     roundType: row.round_type || "General",
     language: row.language || "",
     status: row.status,
-    transcript: transcriptMap.get(row.id) || [],
-    proctoring: proctoringMap.get(row.id) || [],
+    transcript: [],
+    proctoring: [],
     scorecard: row.scorecard,
     createdAt: row.created_at?.toISOString(),
     startedAt: row.started_at?.toISOString() || null,
