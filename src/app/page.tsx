@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -75,6 +75,180 @@ function SkeletonRow() {
       <td className="px-6 py-4"><div className="skeleton h-4 w-24" /></td>
       <td className="px-6 py-4"><div className="skeleton h-4 w-12" /></td>
     </tr>
+  );
+}
+
+function DateRangePicker({ from, to, onChange }: {
+  from: string; to: string;
+  onChange: (from: string, to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selecting, setSelecting] = useState<"from" | "to">("from");
+  const [tempFrom, setTempFrom] = useState(from);
+  const [tempTo, setTempTo] = useState(to);
+  const [viewMonth, setViewMonth] = useState(new Date());
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sync external prop changes
+  useEffect(() => { setTempFrom(from); }, [from]);
+  useEffect(() => { setTempTo(to); }, [to]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Generate calendar days for current month view
+  const getDays = () => {
+    const year = viewMonth.getFullYear();
+    const month = viewMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: (number | null)[] = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+    return days;
+  };
+
+  const formatDateLabel = (d: string) => {
+    if (!d) return "";
+    return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const toDateStr = (day: number) => {
+    const y = viewMonth.getFullYear();
+    const m = String(viewMonth.getMonth() + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const isInRange = (day: number) => {
+    const dateStr = toDateStr(day);
+    return tempFrom && tempTo && dateStr >= tempFrom && dateStr <= tempTo;
+  };
+
+  const isStart = (day: number) => toDateStr(day) === tempFrom;
+  const isEnd = (day: number) => toDateStr(day) === tempTo;
+  const isToday = (day: number) => toDateStr(day) === new Date().toISOString().split("T")[0];
+
+  const handleDayClick = (day: number) => {
+    const dateStr = toDateStr(day);
+    if (selecting === "from") {
+      setTempFrom(dateStr);
+      setTempTo("");
+      setSelecting("to");
+    } else {
+      if (dateStr < tempFrom) {
+        setTempTo(tempFrom);
+        setTempFrom(dateStr);
+        onChange(dateStr, tempFrom);
+      } else {
+        setTempTo(dateStr);
+        onChange(tempFrom, dateStr);
+      }
+      setSelecting("from");
+      setOpen(false);
+    }
+  };
+
+  const prevMonth = () => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1));
+  const nextMonth = () => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1));
+
+  const label = tempFrom && tempTo
+    ? `${formatDateLabel(tempFrom)} \u2014 ${formatDateLabel(tempTo)}`
+    : tempFrom
+      ? `${formatDateLabel(tempFrom)} \u2014 ...`
+      : "Date range";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-all duration-200 ${
+          tempFrom ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span>{label}</span>
+        {tempFrom && (
+          <span
+            onClick={(e) => { e.stopPropagation(); setTempFrom(""); setTempTo(""); onChange("", ""); }}
+            className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+          >&times;</span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute top-full mt-1 z-50 bg-white rounded-xl border border-gray-200 shadow-xl p-4 w-72 animate-fade-in">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={prevMonth} className="p-1 rounded hover:bg-gray-100 transition-colors">
+              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="text-sm font-semibold text-gray-800">
+              {viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </span>
+            <button onClick={nextMonth} className="p-1 rounded hover:bg-gray-100 transition-colors">
+              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+
+          {/* Hint */}
+          <p className="text-xs text-gray-400 mb-2 text-center">
+            {selecting === "from" ? "Select start date" : "Select end date"}
+          </p>
+
+          {/* Day headers */}
+          <div className="grid grid-cols-7 gap-0 mb-1">
+            {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
+              <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">{d}</div>
+            ))}
+          </div>
+
+          {/* Days grid */}
+          <div className="grid grid-cols-7 gap-0">
+            {getDays().map((day, i) => (
+              <div key={i} className="flex items-center justify-center">
+                {day ? (
+                  <button
+                    onClick={() => handleDayClick(day)}
+                    className={`w-8 h-8 text-xs rounded-full transition-all duration-150 ${
+                      isStart(day) || isEnd(day)
+                        ? "bg-indigo-600 text-white font-semibold"
+                        : isInRange(day)
+                          ? "bg-indigo-100 text-indigo-700"
+                          : isToday(day)
+                            ? "border border-indigo-300 text-indigo-600 font-medium"
+                            : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ) : <div className="w-8 h-8" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Quick presets */}
+          <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-100">
+            {[
+              { label: "Today", fn: () => { const t = new Date().toISOString().split("T")[0]; setTempFrom(t); setTempTo(t); onChange(t, t); setOpen(false); }},
+              { label: "7d", fn: () => { const t = new Date(); const f = new Date(t); f.setDate(f.getDate()-7); const fs=f.toISOString().split("T")[0]; const ts=t.toISOString().split("T")[0]; setTempFrom(fs); setTempTo(ts); onChange(fs, ts); setOpen(false); }},
+              { label: "30d", fn: () => { const t = new Date(); const f = new Date(t); f.setDate(f.getDate()-30); const fs=f.toISOString().split("T")[0]; const ts=t.toISOString().split("T")[0]; setTempFrom(fs); setTempTo(ts); onChange(fs, ts); setOpen(false); }},
+              { label: "All", fn: () => { setTempFrom(""); setTempTo(""); onChange("", ""); setOpen(false); }},
+            ].map(p => (
+              <button key={p.label} onClick={p.fn} className="flex-1 text-xs py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">{p.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -351,35 +525,11 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <svg className="w-4 h-4 text-gray-400 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-700 transition-all duration-200"
-              />
-              <span className="text-gray-400 text-sm">to</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-700 transition-all duration-200"
-              />
-              {(dateFrom || dateTo) && (
-                <button
-                  onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  className="px-2.5 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
-                  title="Clear dates"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
+            <DateRangePicker
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+            />
 
             <button
               onClick={exportCSV}
