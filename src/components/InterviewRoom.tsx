@@ -161,7 +161,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           }
 
           if (remaining === 0) {
-            // Time already expired while away — end it
+            // Time expired — mark completed only if still in_progress
+            if (interview.status === "in_progress") {
+              fetch(`/api/interview/${interviewId}/end`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: tokenRef.current }),
+              }).catch(() => {});
+            }
             window.location.href = `/completed/${interviewId}`;
             return;
           }
