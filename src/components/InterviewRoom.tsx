@@ -29,6 +29,15 @@ interface ProctoringAlert {
   timestamp: number;
 }
 
+// Send critical frontend logs to server for debugging
+function serverLog(level: "info" | "warn" | "error", message: string, interviewId?: string, data?: any) {
+  fetch("/api/client-log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, message, interviewId, data }),
+  }).catch(() => {});
+}
+
 export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Core state
   const [interviewData, setInterviewData] = useState<InterviewData | null>(null);
@@ -480,6 +489,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       const safetyTimeout = setTimeout(() => {
         if (isProcessingRef.current) {
           console.error("[AI] Safety timeout — force resetting after 30s");
+          serverLog("error", "AI safety timeout — force reset after 30s", interviewId);
           isProcessingRef.current = false;
           setIsAIThinking(false);
           setIsAISpeaking(false);
@@ -637,6 +647,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         setCurrentAIText("");
       } catch (err) {
         console.error("[AI] Response failed:", err);
+        serverLog("error", "AI response failed", interviewId, { error: String(err) });
         setIsAISpeaking(false);
         isAISpeakingRef.current = false;
         setCurrentAIText("");
