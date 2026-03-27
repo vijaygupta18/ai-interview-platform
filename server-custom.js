@@ -1,7 +1,8 @@
 // Custom server wrapper that adds WebSocket proxy for STT
-// The Next.js standalone server handles all HTTP, this adds WS support on /api/stt-ws
+// In production (standalone), wraps the Next.js standalone handler
+// In dev, uses next() directly
 
-// Load .env.local before anything else (Next.js does this internally but we need it for WS proxy)
+// Load .env.local before anything else
 const path = require("path");
 const fs = require("fs");
 const envPath = path.join(__dirname, ".env.local");
@@ -14,7 +15,6 @@ if (fs.existsSync(envPath)) {
     if (eqIdx === -1) continue;
     const key = trimmed.substring(0, eqIdx).trim();
     let val = trimmed.substring(eqIdx + 1).trim();
-    // Strip surrounding quotes
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
@@ -24,16 +24,12 @@ if (fs.existsSync(envPath)) {
 
 const { createServer } = require("http");
 const { parse } = require("url");
-const next = require("next");
 const { WebSocket, WebSocketServer } = require("ws");
 const { Pool } = require("pg");
 
-const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
 const port = parseInt(process.env.PORT || "3000", 10);
-
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
+const dev = process.env.NODE_ENV !== "production";
 
 // DB pool for token validation
 const pool = new Pool({
@@ -41,7 +37,7 @@ const pool = new Pool({
   max: 3,
 });
 
-// STT provider config (same logic as src/lib/providers/index.ts)
+// STT provider config
 function getSTTProviderConfig() {
   const provider = process.env.STT_PROVIDER || "deepgram";
   const language = process.env.STT_LANGUAGE || "en-IN";
@@ -66,19 +62,8 @@ function getSTTProviderConfig() {
   };
 }
 
-app.prepare().then(() => {
-  const server = createServer(async (req, res) => {
-    try {
-      const parsedUrl = parse(req.url, true);
-      await handle(req, res, parsedUrl);
-    } catch (err) {
-      console.error("Error handling request:", err);
-      res.statusCode = 500;
-      res.end("Internal server error");
-    }
-  });
-
-  // WebSocket server for STT proxy — only handles /api/stt-ws
+// Setup WebSocket proxy on an HTTP server
+function setupWSProxy(server) {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", async (req, socket, head) => {
@@ -89,7 +74,6 @@ app.prepare().then(() => {
       return;
     }
 
-    // Validate interview token
     const token = query.token;
     if (!token) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -119,24 +103,15 @@ app.prepare().then(() => {
     });
   });
 
-  wss.on("connection", (clientWs, req) => {
+  wss.on("connection", (clientWs) => {
     const config = getSTTProviderConfig();
     console.log(`[STT-WS] Client connected, proxying to ${config.provider}`);
 
-    // Keep connection alive (ALB has 60s idle timeout)
     let upstreamWs;
-    const pingInterval = setInterval(() => {
-      if (clientWs.readyState === WebSocket.OPEN) clientWs.ping();
-      if (upstreamWs && upstreamWs.readyState === WebSocket.OPEN) upstreamWs.ping();
-    }, 25000);
-
-    // Connect to upstream STT provider
     try {
       if (config.protocols) {
-        // Deepgram: auth via subprotocols ["token", "key"]
         upstreamWs = new WebSocket(config.wsUrl, config.protocols);
       } else {
-        // Sarvam: auth via headers
         upstreamWs = new WebSocket(config.wsUrl, { headers: config.headers });
       }
     } catch (err) {
@@ -154,19 +129,16 @@ app.prepare().then(() => {
       });
     });
 
-    // Client → Upstream (audio data) — buffer until upstream is ready
+    // Buffer audio until upstream is ready
     const pendingAudio = [];
     let upstreamReady = false;
 
     upstreamWs.on("open", () => {
       upstreamReady = true;
       console.log(`[STT-WS] Connected to ${config.provider}`);
-      // Flush buffered audio
       if (pendingAudio.length > 0) {
         console.log(`[STT-WS] Flushing ${pendingAudio.length} buffered audio chunks`);
-        for (const chunk of pendingAudio) {
-          upstreamWs.send(chunk);
-        }
+        for (const chunk of pendingAudio) upstreamWs.send(chunk);
         pendingAudio.length = 0;
       }
     });
@@ -174,48 +146,40 @@ app.prepare().then(() => {
     clientWs.on("message", (data) => {
       if (upstreamReady && upstreamWs.readyState === WebSocket.OPEN) {
         upstreamWs.send(data);
-      } else {
-        // Buffer until upstream is ready (max 50 chunks to prevent memory issues)
-        if (pendingAudio.length < 50) {
-          pendingAudio.push(data);
-        }
+      } else if (pendingAudio.length < 50) {
+        pendingAudio.push(data);
       }
     });
 
-    // Upstream → Client (transcripts — forward as string so browser doesn't get Blob)
     upstreamWs.on("message", (data, isBinary) => {
       if (clientWs.readyState === WebSocket.OPEN) {
-        if (isBinary) {
-          clientWs.send(data);
-        } else {
-          clientWs.send(data.toString());
-        }
+        clientWs.send(isBinary ? data : data.toString());
       }
     });
 
-    // Handle closes
+    // Keep-alive pings
+    const pingInterval = setInterval(() => {
+      if (clientWs.readyState === WebSocket.OPEN) clientWs.ping();
+      if (upstreamWs && upstreamWs.readyState === WebSocket.OPEN) upstreamWs.ping();
+    }, 25000);
+
     clientWs.on("close", () => {
-      console.log("[STT-WS] Client disconnected");
       clearInterval(pingInterval);
+      console.log("[STT-WS] Client disconnected");
       if (upstreamWs.readyState === WebSocket.OPEN || upstreamWs.readyState === WebSocket.CONNECTING) {
-        upstreamWs.terminate(); // terminate works for both OPEN and CONNECTING
+        upstreamWs.terminate();
       }
     });
 
     upstreamWs.on("close", (code, reason) => {
-      console.log(`[STT-WS] Upstream disconnected code=${code} reason=${reason?.toString()?.substring(0,100)}`);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.close();
-      }
+      console.log(`[STT-WS] Upstream disconnected code=${code} reason=${reason?.toString()?.substring(0, 100)}`);
+      if (clientWs.readyState === WebSocket.OPEN) clientWs.close();
     });
 
-    // Handle errors
     clientWs.on("error", (err) => console.error("[STT-WS] Client error:", err));
     upstreamWs.on("error", (err) => {
       console.error("[STT-WS] Upstream error:", err);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.close(1011, "STT provider error");
-      }
+      if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011, "STT provider error");
     });
   });
 
@@ -226,14 +190,80 @@ app.prepare().then(() => {
     wss.close();
     pool.end();
     server.close(() => process.exit(0));
-    setTimeout(() => process.exit(1), 5000); // Force exit after 5s
+    setTimeout(() => process.exit(1), 5000);
   }
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+
+  return wss;
+}
+
+// Start server
+async function main() {
+  let server;
+
+  if (dev) {
+    // Dev mode: use next() directly
+    const next = require("next");
+    const app = next({ dev, hostname, port });
+    const handle = app.getRequestHandler();
+    await app.prepare();
+
+    server = createServer(async (req, res) => {
+      try {
+        const parsedUrl = parse(req.url, true);
+        await handle(req, res, parsedUrl);
+      } catch (err) {
+        console.error("Error:", err);
+        res.statusCode = 500;
+        res.end("Internal server error");
+      }
+    });
+  } else {
+    // Production: use the standalone Next.js server handler
+    const nextServer = require("./server.js");
+    // The standalone server.js sets up its own HTTP server
+    // We need to intercept and add WS proxy before it starts listening
+    // Approach: override the server creation
+    const NextNodeServer = require("next/dist/server/next-server").default;
+    const conf = require("./.next/required-server-files.json");
+
+    process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(conf.config);
+
+    const nextApp = new NextNodeServer({
+      hostname,
+      port,
+      dir: __dirname,
+      dev: false,
+      customServer: true,
+      conf: conf.config,
+    });
+
+    const handler = nextApp.getRequestHandler();
+    await nextApp.prepare();
+
+    server = createServer(async (req, res) => {
+      try {
+        await handler(req, res);
+      } catch (err) {
+        console.error("Error:", err);
+        res.statusCode = 500;
+        res.end("Internal server error");
+      }
+    });
+  }
+
+  setupWSProxy(server);
 
   server.listen(port, hostname, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> STT WebSocket proxy on ws://${hostname}:${port}/api/stt-ws`);
     console.log(`> STT Provider: ${getSTTProviderConfig().provider}`);
+    console.log(`> Mode: ${dev ? "development" : "production"}`);
   });
+}
+
+main().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
