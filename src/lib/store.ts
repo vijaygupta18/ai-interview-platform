@@ -237,17 +237,10 @@ export async function getProctoringViolationCount(interviewId: string): Promise<
       CASE type
         WHEN 'face_missing' THEN 0.5
         WHEN 'eye_away' THEN 0.5
-        WHEN 'fullscreen_exit' THEN 1
-        WHEN 'window_blur' THEN 1
-        WHEN 'phone_detected' THEN 1.5
-        WHEN 'multiple_faces' THEN 1.5
-        WHEN 'screen_share_stopped' THEN 2
-        WHEN 'virtual_camera' THEN 2
         ELSE 1
       END
     ), 0) as weighted_count
-    FROM proctoring_events WHERE interview_id = $1 AND severity = 'flag'
-    AND type IN ('face_missing','multiple_faces','screen_share_stopped','phone_detected','eye_away','fullscreen_exit','window_blur','virtual_camera')`,
+    FROM proctoring_events WHERE interview_id = $1 AND severity = 'flag'`,
     [interviewId]
   );
   return parseFloat(rows[0].weighted_count);

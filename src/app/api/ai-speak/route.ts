@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     }
 
     // Server-side proctoring enforcement
-    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8");
+    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
     if (violations >= MAX_STRIKES) {
       await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
       return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });
@@ -74,13 +74,20 @@ export async function POST(req: Request) {
     const aiText = await getAIResponse(interview, transcript ?? interview.transcript);
 
     const cleanedText = stripThinking(aiText);
+    // Clean for TTS — remove special chars that TTS speaks literally
+    const ttsText = cleanedText
+      .replace(/[*#_~`|<>{}[\]\\]/g, "")
+      .replace(/\bhttps?:\/\/\S+/g, "")
+      .replace(/\n+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
 
     try {
       const ttsProvider = getTTSProvider();
 
       // Parallelize TTS generation + AI transcript save
       const [audioBuffer] = await Promise.all([
-        ttsProvider.synthesize(cleanedText),
+        ttsProvider.synthesize(ttsText || cleanedText),
         addTranscriptEntry(interviewId, { role: "ai", text: aiText, timestamp: new Date().toISOString() }),
       ]);
 

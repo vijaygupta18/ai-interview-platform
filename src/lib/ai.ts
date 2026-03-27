@@ -18,15 +18,9 @@ export function stripThinking(text: string): string {
   // First check if response has obvious thinking markers
   const hasThinkingMarkers = /<think|^\d+\.\s*(NOT|I'm |First|Then)/mi.test(cleaned);
   if (!hasThinkingMarkers) {
-    // No thinking detected — just clean formatting for TTS
-    cleaned = cleaned
-      .replace(/\*\*/g, "").replace(/\*/g, "")
-      .replace(/^#+\s*/gm, "").replace(/^[-*•]\s+/gm, "")
-      .replace(/`[^`]*`/g, (m) => m.slice(1, -1))
-      .replace(/```[\s\S]*?```/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/[~_{}|<>]/g, "")
-      .trim();
+    // No thinking detected — return as-is (just clean XML tags)
+    // Final cleanup: remove stray formatting
+    cleaned = cleaned.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").trim();
     return cleaned || text.trim();
   }
 
@@ -52,19 +46,8 @@ export function stripThinking(text: string): string {
     cleaned = spokenParagraphs.join("\n\n").trim();
   }
 
-  // Final cleanup: remove all formatting/special chars that sound bad in TTS
-  cleaned = cleaned
-    .replace(/\*\*/g, "")           // bold **text**
-    .replace(/\*/g, "")             // italic *text*
-    .replace(/^#+\s*/gm, "")        // headers # ## ###
-    .replace(/^[-*•]\s+/gm, "")     // bullet points - * •
-    .replace(/^\d+\.\s+/gm, "")     // numbered lists 1. 2. 3.
-    .replace(/`[^`]*`/g, (m) => m.slice(1, -1)) // inline code `text` → text
-    .replace(/```[\s\S]*?```/g, "")  // code blocks
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links [text](url) → text
-    .replace(/[~_{}|<>]/g, "")      // stray markdown chars
-    .replace(/\n{3,}/g, "\n\n")     // excessive newlines
-    .trim();
+  // Final cleanup: remove stray formatting
+  cleaned = cleaned.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").trim();
 
   return cleaned || text.trim();
 }

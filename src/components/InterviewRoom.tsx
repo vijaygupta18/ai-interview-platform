@@ -195,7 +195,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               const decayAmount = Math.floor(elapsedMinutes / 5) * 0.5;
               const adjustedCount = Math.max(0, count - decayAmount);
               setProctoringWarnings(adjustedCount);
-              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8");
+              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
               if (count >= maxStrikes) setShowProctoringBan(true);
             }
           } catch (err) {
@@ -468,10 +468,25 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   const getAIResponse = useCallback(
     async (currentTranscript: TranscriptEntry[], options?: { skipSave?: boolean }) => {
-      if (isProcessingRef.current) return;
+      if (isProcessingRef.current) {
+        console.warn("[AI] Already processing, skipping");
+        return;
+      }
       if (isEndingRef.current) return;
       isProcessingRef.current = true;
       setIsAIThinking(true);
+
+      // Safety timeout — if AI call hangs for >30s, force-reset
+      const safetyTimeout = setTimeout(() => {
+        if (isProcessingRef.current) {
+          console.error("[AI] Safety timeout — force resetting after 30s");
+          isProcessingRef.current = false;
+          setIsAIThinking(false);
+          setIsAISpeaking(false);
+          isAISpeakingRef.current = false;
+        }
+      }, 30000);
+
       try {
         // Streaming AI + TTS pipeline — first audio plays while rest generates
         const res = await fetch("/api/ai-speak-stream", {
@@ -611,16 +626,22 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }
 
         streamDone = true;
-        // Wait for remaining audio to finish playing in order
-        while (audioMap.size > 0 || isPlaying) {
+        // Wait for remaining audio to finish (max 20s to prevent hang)
+        let waitCount = 0;
+        while ((audioMap.size > 0 || isPlaying) && waitCount < 200) {
           await new Promise((r) => setTimeout(r, 100));
+          waitCount++;
         }
         setIsAISpeaking(false);
         isAISpeakingRef.current = false;
         setCurrentAIText("");
       } catch (err) {
-        console.error("AI response failed:", err);
+        console.error("[AI] Response failed:", err);
+        setIsAISpeaking(false);
+        isAISpeakingRef.current = false;
+        setCurrentAIText("");
       } finally {
+        clearTimeout(safetyTimeout);
         isProcessingRef.current = false;
         setIsAIThinking(false);
       }
@@ -1040,25 +1061,25 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
       // Track violations — weighted by severity (consistent with server-side getProctoringViolationCount)
       const strikeWeights: Record<string, number> = {
-        face_missing: 0.5,
-        eye_away: 0.5,
-        fullscreen_exit: 1,
-        window_blur: 1,
-        phone_detected: 1.5,
-        multiple_faces: 1.5,
-        second_monitor: 1.5,
-        devtools_open: 1.5,
-        screen_share_stopped: 2,
-        virtual_camera: 2,
-        heartbeat_missing: 2,
-        multiple_voices: 1,
+        face_missing: 0.5,   // could be sneeze/lean — low risk
+        eye_away: 0.5,       // looking sideways briefly — low risk
+        fullscreen_exit: 1,  // left fullscreen — medium risk
+        window_blur: 1,      // switched tab/window — medium risk
+        phone_detected: 1,   // bright object — medium risk (can be false positive)
+        multiple_faces: 1,   // another person — medium risk
+        second_monitor: 1,   // extended display — medium risk
+        devtools_open: 1,    // dev tools — medium risk
+        screen_share_stopped: 1, // stopped sharing — medium risk
+        virtual_camera: 1,   // OBS/fake camera — medium risk
+        heartbeat_missing: 1, // proctoring disabled — medium risk
+        multiple_voices: 1,  // someone else speaking — medium risk
       };
       const effectiveSeverity = event.severity || "flag";
       const weight = strikeWeights[event.type] || 0;
       if (weight > 0 && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + weight;
-          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8");
+          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
           if (next >= maxStrikes) {
             setShowProctoringBan(true);
           }
@@ -1682,7 +1703,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               : "bg-yellow-900/90 border-yellow-500/30 backdrop-blur"
           }`}>
             <div className="flex gap-1">
-              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8"), 10) }, (_, i) => i + 1).map((i) => (
+              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10"), 10) }, (_, i) => i + 1).map((i) => (
                 <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                   i <= proctoringWarnings
                     ? "bg-red-500 border-red-400 scale-110"
@@ -1691,7 +1712,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               ))}
             </div>
             <span className={`text-sm font-medium ${proctoringWarnings >= 3 ? "text-red-200" : "text-yellow-200"}`}>
-              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
+              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
             </span>
           </div>
         </div>

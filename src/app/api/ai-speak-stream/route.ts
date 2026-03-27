@@ -5,6 +5,17 @@ import { rateLimit } from "@/lib/rate-limit";
 import { pool } from "@/lib/db";
 import { getTTSProvider } from "@/lib/providers";
 
+// Clean text for TTS — remove special characters that cause TTS to speak them literally
+function cleanForTTS(text: string): string {
+  return text
+    .replace(/[*#_~`|<>{}[\]\\]/g, "") // markdown/code chars
+    .replace(/\bhttps?:\/\/\S+/g, "")  // URLs
+    .replace(/\b[\w.-]+@[\w.-]+\.\w+/g, "") // emails
+    .replace(/\n+/g, " ")              // newlines to space
+    .replace(/\s{2,}/g, " ")           // collapse multiple spaces
+    .trim();
+}
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -133,11 +144,15 @@ export async function POST(req: Request) {
             const cleaned = stripThinking(sentence).trim();
             if (!cleaned) return;
 
-            // Send text immediately
+            // Send original text for transcript
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text: cleaned, idx })}\n\n`));
 
+            // Clean for TTS — remove special chars that TTS speaks literally
+            const ttsText = cleanForTTS(cleaned);
+            if (!ttsText) return;
+
             // Generate TTS in parallel (client plays in order using idx)
-            const p = ttsProvider.synthesize(cleaned).then((audioBuffer) => {
+            const p = ttsProvider.synthesize(ttsText).then((audioBuffer) => {
               const audioBase64 = audioBuffer.toString("base64");
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({
                 type: "audio",
