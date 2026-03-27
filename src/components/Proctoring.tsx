@@ -158,13 +158,23 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Periodic check removed — blur+visibility+focus cover all cases;
-    // periodic poll caused too many false positives from momentary focus loss
+    // Periodic focus poll — catches tab/window switches that blur/visibility miss
+    // (e.g., sharing a specific tab, Cmd+Tab on macOS fullscreen, OS-level overlays)
+    const focusPoll = setInterval(() => {
+      if (!document.hasFocus()) {
+        const now = Date.now();
+        if (now - lastAlert > 5000) {
+          lastAlert = now;
+          alert("window_blur", "flag", "Candidate left the interview window");
+        }
+      }
+    }, 3000);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(focusPoll);
       if (shortBlurResetTimer) clearTimeout(shortBlurResetTimer);
     };
   }, [enabled, alert]);
@@ -272,9 +282,20 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   // Face detection + gaze tracking using MediaPipe FaceLandmarker
   // Works on ALL browsers, provides 478 face landmarks including iris positions
   // Enables true gaze detection (where eyes are looking, not just head position)
+  const nativeFaceDetectorRef = useRef<any>(null);
+
   useEffect(() => {
     if (!enabled) return;
 
+    // Try Chrome native FaceDetector first (fastest, no download)
+    if ("FaceDetector" in window) {
+      try {
+        nativeFaceDetectorRef.current = new (window as any).FaceDetector({ maxDetectedFaces: 5, fastMode: true });
+        console.log("[Proctoring] Chrome FaceDetector available");
+      } catch { nativeFaceDetectorRef.current = null; }
+    }
+
+    // Load MediaPipe FaceLandmarker for gaze tracking (all browsers)
     let cancelled = false;
     (async () => {
       try {
@@ -284,27 +305,48 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
         if (cancelled) return;
-        faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(filesetResolver, {
-          baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.tflite",
-            delegate: "GPU",
-          },
-          runningMode: "IMAGE",
-          numFaces: 5,
-          minFaceDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-          outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false,
-        });
-        console.log("[Proctoring] FaceLandmarker loaded");
+        // Try GPU first, fall back to CPU
+        for (const delegate of ["GPU", "CPU"] as const) {
+          try {
+            faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(filesetResolver, {
+              baseOptions: {
+                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.tflite",
+                delegate,
+              },
+              runningMode: "IMAGE",
+              numFaces: 5,
+              minFaceDetectionConfidence: 0.5,
+              minTrackingConfidence: 0.5,
+              outputFaceBlendshapes: false,
+              outputFacialTransformationMatrixes: false,
+            });
+            console.log(`[Proctoring] FaceLandmarker loaded (${delegate})`);
+            break;
+          } catch (e) {
+            console.warn(`[Proctoring] FaceLandmarker ${delegate} failed:`, e);
+            if (delegate === "CPU") console.error("[Proctoring] FaceLandmarker unavailable");
+          }
+        }
       } catch (err) {
-        console.warn("[Proctoring] FaceLandmarker failed:", err);
+        console.warn("[Proctoring] FaceLandmarker import failed:", err);
       }
     })();
 
-    const detect = () => {
+    const detect = async () => {
       const video = videoRef.current;
-      if (!video || video.readyState < 2 || video.videoWidth === 0 || !faceLandmarkerRef.current) return;
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+      // If MediaPipe not loaded yet, use Chrome native FaceDetector for basic count
+      if (!faceLandmarkerRef.current) {
+        if (nativeFaceDetectorRef.current) {
+          try {
+            const faces = await nativeFaceDetectorRef.current.detect(video);
+            if (faces.length === 0) alert("face_missing", "flag", "No face detected — please face the camera");
+            else if (faces.length > 1) alert("multiple_faces", "flag", `${faces.length} faces detected`);
+          } catch {}
+        }
+        return;
+      }
 
       try {
         const result = faceLandmarkerRef.current.detect(video);
