@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { normalizeScorecard } from "@/lib/normalize-scorecard";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 const dimensionLabels: Record<string, string> = {
   technicalDepth: "Technical Depth",
@@ -86,6 +87,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
   const [loading, setLoading] = useState(true);
   const [scoringStatus, setScoringStatus] = useState<string>("unknown");
   const [selectedPhoto, setSelectedPhoto] = useState<{ photo: string; timestamp: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     fetch(`/api/interview/${params.id}?photos=true`)
@@ -267,14 +269,7 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
               </div>
             )}
             <button
-              onClick={async () => {
-                if (!confirm("Delete this interview? This cannot be undone.")) return;
-                try {
-                  const res = await fetch(`/api/interview/${interview.id}`, { method: "DELETE" });
-                  if (res.ok) window.location.href = "/";
-                  else alert("Failed to delete");
-                } catch { alert("Failed to delete"); }
-              }}
+              onClick={() => setShowDeleteConfirm(true)}
               className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition-colors"
             >
               Delete
@@ -530,10 +525,9 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
                 </div>
               </div>
               {interview.resume && (
-                <div className="mt-3 max-h-48 overflow-y-auto">
+                <div className="mt-3 max-h-96 overflow-y-auto">
                   <pre className="text-xs text-gray-500 whitespace-pre-wrap font-sans leading-relaxed">
-                    {interview.resume.slice(0, 1500)}
-                    {interview.resume.length > 1500 ? "..." : ""}
+                    {interview.resume}
                   </pre>
                 </div>
               )}
@@ -661,6 +655,20 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={showDeleteConfirm}
+        title="Delete Interview"
+        message="Are you sure you want to delete this interview? All data including transcript, proctoring events, and scorecard will be permanently removed."
+        confirmLabel="Delete Interview"
+        onConfirm={async () => {
+          setShowDeleteConfirm(false);
+          try {
+            const res = await fetch(`/api/interview/${interview.id}`, { method: "DELETE" });
+            if (res.ok) window.location.href = "/";
+          } catch {}
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </DashboardLayout>
   );
 }

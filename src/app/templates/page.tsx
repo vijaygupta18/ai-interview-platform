@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 interface EmailTemplate {
   id: string;
@@ -20,6 +21,7 @@ export default function TemplatesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
   const [form, setForm] = useState({ name: "", subject: "", body: "", description: "" });
+  const [deleteTarget, setDeleteTarget] = useState<{id: string; name: string} | null>(null);
 
   const isAdmin = (session?.user as any)?.role === "admin";
 
@@ -60,7 +62,6 @@ export default function TemplatesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this template?")) return;
     await fetch(`/api/email-templates?id=${id}`, { method: "DELETE" });
     fetchTemplates();
   };
@@ -120,7 +121,7 @@ export default function TemplatesPage() {
                         Edit
                       </button>
                       {!t.is_default && (
-                        <button onClick={() => handleDelete(t.id)} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition">
+                        <button onClick={() => setDeleteTarget({id: t.id, name: t.name})} className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition">
                           Delete
                         </button>
                       )}
@@ -186,6 +187,17 @@ export default function TemplatesPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete Email Template"
+        message="Are you sure you want to delete this email template?"
+        onConfirm={() => {
+          if (deleteTarget) handleDelete(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </DashboardLayout>
   );
 }

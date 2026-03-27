@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 interface User {
   id: string;
@@ -17,6 +18,7 @@ export default function TeamPage() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<{id: string; name: string} | null>(null);
 
   const isAdmin = (session?.user as any)?.role === "admin";
 
@@ -53,8 +55,7 @@ export default function TeamPage() {
     fetchUsers();
   };
 
-  const deleteUser = async (userId: string, userName: string) => {
-    if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
+  const deleteUser = async (userId: string) => {
     const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json();
@@ -166,7 +167,7 @@ export default function TeamPage() {
                           {user.role === "admin" ? "Remove Admin" : "Make Admin"}
                         </button>
                         <button
-                          onClick={() => deleteUser(user.id, user.name)}
+                          onClick={() => setDeleteTarget({id: user.id, name: user.name})}
                           className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors"
                         >
                           Delete
@@ -185,6 +186,17 @@ export default function TeamPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete Team Member"
+        message={`Are you sure you want to remove ${deleteTarget?.name ?? ""} from the team?`}
+        onConfirm={() => {
+          if (deleteTarget) deleteUser(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </DashboardLayout>
   );
 }

@@ -230,7 +230,7 @@ TIME MANAGEMENT:
 }
 
 function buildResumeContext(interview: Interview): string {
-  const resume = interview.resume?.substring(0, 3000) || "No resume provided.";
+  const resume = interview.resume?.substring(0, 5000) || "No resume provided.";
   return `Here is the candidate's resume. After asking question bank questions, use this resume to ask specific, targeted follow-ups about their past work:\n\n${resume}`;
 }
 

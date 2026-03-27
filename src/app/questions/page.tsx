@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 interface QuestionBank {
   id: number;
@@ -27,6 +28,7 @@ export default function QuestionsPage() {
   const [roundType, setRoundType] = useState("Technical");
   const [questions, setQuestions] = useState<string[]>([]);
   const [newQuestion, setNewQuestion] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{id: number; name: string} | null>(null);
 
   const fetchBanks = useCallback(async () => {
     try {
@@ -109,7 +111,6 @@ export default function QuestionsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this question bank?")) return;
     try {
       await fetch(`/api/questions/${id}`, { method: "DELETE" });
       fetchBanks();
@@ -200,7 +201,7 @@ export default function QuestionsPage() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleDelete(bank.id)}
+                        onClick={() => setDeleteTarget({id: bank.id, name: bank.name})}
                         className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -368,6 +369,17 @@ export default function QuestionsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete Question Bank"
+        message="Are you sure you want to delete this question bank? All questions in it will be permanently removed."
+        onConfirm={() => {
+          if (deleteTarget) handleDelete(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </DashboardLayout>
   );
 }
