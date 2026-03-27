@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getInterview, addTranscriptEntry, getProctoringViolationCount, updateInterview } from "@/lib/store";
-import { getAIResponse } from "@/lib/ai";
+import { getInterview, addTranscriptEntry, getProctoringViolationCount, updateInterview, addProctoringEvent } from "@/lib/store";
+import { getAIResponse, stripThinking } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateAccessPost } from "@/lib/auth-check";
 import { pool } from "@/lib/db";
@@ -21,72 +21,69 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
+    // Auth gate (must be first)
     if (!(await validateAccessPost(interviewId, token))) {
       return NextResponse.json({ error: "Invalid interview" }, { status: 403 });
     }
 
-    const interview = await getInterview(interviewId);
+    // Parallel: interview data + violation count + heartbeat
+    const [interview, violations, hbResult] = await Promise.all([
+      getInterview(interviewId),
+      getProctoringViolationCount(interviewId),
+      pool.query("SELECT last_heartbeat_at FROM interviews WHERE id = $1", [interviewId]),
+    ]);
+
     if (!interview) {
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
     }
 
     // Server-side proctoring enforcement
     const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
-    const violations = await getProctoringViolationCount(interviewId);
     if (violations >= MAX_STRIKES) {
       await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
       return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });
     }
 
-    // Check proctoring heartbeat — flag if no heartbeat for >45s
-    const { rows: hbRows } = await pool.query(
-      "SELECT last_heartbeat_at FROM interviews WHERE id = $1",
-      [interviewId]
-    );
+    // Heartbeat check (fire-and-forget)
+    const hbRows = hbResult.rows;
     if (hbRows.length > 0 && hbRows[0].last_heartbeat_at) {
-      const lastHb = new Date(hbRows[0].last_heartbeat_at).getTime();
-      const elapsed = Date.now() - lastHb;
+      const elapsed = Date.now() - new Date(hbRows[0].last_heartbeat_at).getTime();
       if (elapsed > 45000) {
-        // Heartbeat missing — proctoring may be disabled, log it
-        const { addProctoringEvent } = await import("@/lib/store");
-        await addProctoringEvent(interviewId, {
+        addProctoringEvent(interviewId, {
           type: "heartbeat_missing",
           severity: "flag",
           message: `No proctoring heartbeat for ${Math.round(elapsed / 1000)}s`,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {});
       }
     }
 
-    // Save candidate message (skip for watchdog-triggered calls to avoid polluting transcript)
+    // Save candidate message (fire-and-forget — don't block AI call)
     if (!skipSave && transcript?.length > 0) {
       const lastEntry = transcript[transcript.length - 1];
       if (lastEntry.role === "candidate" && lastEntry.text) {
-        await addTranscriptEntry(interviewId, {
+        addTranscriptEntry(interviewId, {
           role: "candidate",
           text: lastEntry.text,
           timestamp: new Date().toISOString(),
-        });
+        }).catch(() => {});
       }
     }
 
     // Get AI response
     const aiText = await getAIResponse(interview, transcript ?? interview.transcript);
 
-    // Save AI message
-    await addTranscriptEntry(interviewId, {
-      role: "ai",
-      text: aiText,
-      timestamp: new Date().toISOString(),
-    });
-
-    // Generate TTS audio via provider abstraction
-    const { stripThinking } = await import("@/lib/ai");
     const cleanedText = stripThinking(aiText);
 
     try {
       const ttsProvider = getTTSProvider();
-      const audioBuffer = await ttsProvider.synthesize(cleanedText);
+
+      // Parallelize TTS generation + AI transcript save
+      const [audioBuffer] = await Promise.all([
+        ttsProvider.synthesize(cleanedText),
+        addTranscriptEntry(interviewId, { role: "ai", text: aiText, timestamp: new Date().toISOString() }),
+      ]);
+
       const audioBase64 = audioBuffer.toString("base64");
 
       return NextResponse.json({

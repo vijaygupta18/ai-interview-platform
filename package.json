@@ -11,7 +11,6 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^0.2.0",
     "@deepgram/sdk": "^3.9.0",
-    "@google-cloud/text-to-speech": "^6.4.0",
     "@monaco-editor/react": "^4.7.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/nodemailer": "^7.0.11",

@@ -61,7 +61,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Pre-interview checks
   const [cameraReady, setCameraReady] = useState(false);
   const [micReady, setMicReady] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
+  const audioLevelRef = useRef(0);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -215,7 +215,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     async function setupMedia() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720, facingMode: "user" },
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
           audio: true,
         });
         mediaStreamRef.current = stream;
@@ -246,7 +246,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         const updateLevel = () => {
           analyser.getByteFrequencyData(dataArray);
           const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          setAudioLevel(avg / 255);
+          audioLevelRef.current = avg / 255;
+          // Directly update DOM element for the level bars
+          const levelEl = document.getElementById("mic-level-bars");
+          if (levelEl) {
+            const bars = levelEl.children;
+            for (let i = 0; i < bars.length; i++) {
+              const threshold = (i + 1) / bars.length;
+              (bars[i] as HTMLElement).style.opacity = audioLevelRef.current > threshold ? "1" : "0.2";
+            }
+          }
           animFrameRef.current = requestAnimationFrame(updateLevel);
         };
         updateLevel();
@@ -660,7 +669,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
           if (speechFinal) {
             // Speech ended — trigger after short delay
-            silenceTimerRef.current = setTimeout(triggerAI, 200);
+            silenceTimerRef.current = setTimeout(triggerAI, 50);
           } else {
             // Not speech_final yet — use longer timeout as fallback
             silenceTimerRef.current = setTimeout(triggerAI, 1500);
@@ -1121,20 +1130,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         {/* Mic Level */}
         <div className="flex items-center gap-3">
           <span className="text-xs text-zinc-400">Mic Level</span>
-          <div className="flex h-4 items-end gap-[2px]">
+          <div id="mic-level-bars" className="flex items-end gap-0.5 h-4">
             {Array.from({ length: 20 }).map((_, i) => (
               <div
                 key={i}
-                className="w-[3px] rounded-full transition-all duration-75"
-                style={{
-                  height: `${Math.max(2, audioLevel * 16 * (i < audioLevel * 20 ? 1 : 0.15))}px`,
-                  backgroundColor:
-                    i / 20 < audioLevel
-                      ? audioLevel > 0.7
-                        ? "#ef4444"
-                        : "#22c55e"
-                      : "rgba(255,255,255,0.1)",
-                }}
+                className="w-0.5 bg-green-400 rounded-full transition-opacity duration-75"
+                style={{ height: `${20 + (i / 20) * 80}%`, opacity: 0.2 }}
               />
             ))}
           </div>

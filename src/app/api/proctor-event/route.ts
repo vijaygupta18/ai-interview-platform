@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       const photoFile = formData.get("photo") as File | null;
       if (photoFile) {
         const buffer = Buffer.from(await photoFile.arrayBuffer());
-        if (buffer.length > 30000) {
+        if (buffer.length > 100000) {
           return NextResponse.json({ error: "Photo too large" }, { status: 400 });
         }
         photoData = buffer;

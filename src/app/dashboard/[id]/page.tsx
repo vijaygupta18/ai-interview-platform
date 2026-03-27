@@ -637,13 +637,13 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
           onClick={() => setSelectedPhoto(null)}
         >
           <div
-            className="relative max-w-2xl w-full animate-scale-in"
+            className="relative inline-block animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <img
               src={selectedPhoto.photo}
               alt="Candidate snapshot"
-              className="w-full rounded-xl shadow-2xl border border-gray-700"
+              className="max-w-[480px] max-h-[80vh] rounded-xl shadow-2xl border border-gray-700"
             />
             <div className="absolute bottom-0 left-0 right-0 bg-black/60 rounded-b-xl px-4 py-2 flex items-center justify-between">
               <span className="text-sm text-white">

@@ -40,11 +40,11 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     const video = videoRef.current;
     const canvas = photoCanvasRef.current;
     if (!video || !canvas || video.readyState < 2) return;
-    canvas.width = 160;
-    canvas.height = 120;
+    canvas.width = 480;
+    canvas.height = 360;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0, 160, 120);
+    ctx.drawImage(video, 0, 0, 480, 360);
     canvas.toBlob((blob) => {
       if (!blob) return;
       const formData = new FormData();
@@ -55,7 +55,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       formData.append("photo", blob, "violation.webp");
       if (token) formData.append("token", token);
       fetch("/api/proctor-event", { method: "POST", body: formData }).catch(() => {});
-    }, "image/webp", 0.3);
+    }, "image/webp", 0.5);
   }, [videoRef, interviewId, token]);
 
   const alert = useCallback(
@@ -367,14 +367,14 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       const video = videoRef.current;
       const canvas = photoCanvasRef.current;
       if (!video || !canvas || video.readyState < 2) return;
-      canvas.width = 160;
-      canvas.height = 120;
+      canvas.width = 320;
+      canvas.height = 240;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.drawImage(video, 0, 0, 160, 120);
+      ctx.drawImage(video, 0, 0, 320, 240);
       photoCountRef.current++;
       const count = photoCountRef.current;
-      // Use WebP (30% smaller than JPEG), send as binary blob via FormData (no base64 overhead)
+      // WebP binary upload — decent quality for review
       canvas.toBlob((blob) => {
         if (!blob) return;
         const formData = new FormData();
@@ -385,7 +385,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         formData.append("photo", blob, `photo_${count}.webp`);
         if (token) formData.append("token", token);
         fetch("/api/proctor-event", { method: "POST", body: formData }).catch(() => {});
-      }, "image/webp", 0.3);
+      }, "image/webp", 0.5);
     };
     const first = setTimeout(capture, 30000);
     const interval = setInterval(capture, 120000);

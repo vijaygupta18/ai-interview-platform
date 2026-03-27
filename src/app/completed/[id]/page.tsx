@@ -9,10 +9,13 @@ export default function CompletedPage() {
   const [showConfetti, setShowConfetti] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/interview/${id}`)
-      .then((r) => r.json())
-      .then(setInterview)
-      .catch(console.error);
+    // Fetch minimal interview info (token from URL for auth)
+    const token = new URLSearchParams(window.location.search).get("token");
+    const params = token ? `?token=${token}` : "";
+    fetch(`/api/interview/${id}${params}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setInterview(data); })
+      .catch(() => {});
 
     const timer = setTimeout(() => setShowConfetti(false), 3000);
     return () => clearTimeout(timer);

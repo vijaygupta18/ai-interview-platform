@@ -161,7 +161,7 @@ export async function getInterviewWithPhotos(id: string): Promise<Interview | nu
   };
 }
 
-export async function updateInterview(id: string, updates: Partial<Interview>): Promise<Interview | null> {
+export async function updateInterview(id: string, updates: Partial<Interview>): Promise<void> {
   const setClauses: string[] = [];
   const values: any[] = [];
   let idx = 1;
@@ -186,11 +186,10 @@ export async function updateInterview(id: string, updates: Partial<Interview>): 
     }
   }
 
-  if (setClauses.length === 0) return getInterview(id);
+  if (setClauses.length === 0) return;
 
   values.push(id);
   await pool.query(`UPDATE interviews SET ${setClauses.join(", ")} WHERE id = $${idx}`, values);
-  return getInterview(id);
 }
 
 async function getTranscript(interviewId: string): Promise<TranscriptEntry[]> {
@@ -256,8 +255,8 @@ export async function getProctoringViolationCount(interviewId: string): Promise<
 
 export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, "resume">[]> {
   const interviewQuery = orgId
-    ? "SELECT id, resume_file_name, candidate_email, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews WHERE org_id = $1 ORDER BY created_at DESC"
-    : "SELECT id, resume_file_name, candidate_email, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews ORDER BY created_at DESC";
+    ? "SELECT id, resume_file_name, candidate_email, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews WHERE org_id = $1 ORDER BY created_at DESC LIMIT 100"
+    : "SELECT id, resume_file_name, candidate_email, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews ORDER BY created_at DESC LIMIT 100";
   const { rows } = await pool.query(interviewQuery, orgId ? [orgId] : []);
 
   if (rows.length === 0) return [];

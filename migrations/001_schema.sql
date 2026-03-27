@@ -86,6 +86,8 @@ CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
 CREATE INDEX IF NOT EXISTS idx_interviews_email ON interviews(candidate_email);
 CREATE INDEX IF NOT EXISTS idx_interviews_created ON interviews(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_interviews_token ON interviews(token);
+CREATE INDEX IF NOT EXISTS idx_interviews_token_status ON interviews(token, status);
+CREATE INDEX IF NOT EXISTS idx_interviews_org_created ON interviews(org_id, created_at DESC);
 
 -- ============================================
 -- 4. Transcript Entries

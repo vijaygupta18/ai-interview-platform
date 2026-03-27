@@ -38,6 +38,7 @@ const handle = app.getRequestHandler();
 // DB pool for token validation
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/ai_interview_platform",
+  max: 3,
 });
 
 // STT provider config (same logic as src/lib/providers/index.ts)
@@ -58,7 +59,7 @@ function getSTTProviderConfig() {
   const apiKey = process.env.DEEPGRAM_API_KEY || "";
   return {
     provider: "deepgram",
-    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=1200&vad_events=true`,
+    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=500&vad_events=true`,
     protocols: ["token", apiKey],
     headers: {},
     params: {},
@@ -122,8 +123,14 @@ app.prepare().then(() => {
     const config = getSTTProviderConfig();
     console.log(`[STT-WS] Client connected, proxying to ${config.provider}`);
 
-    // Connect to upstream STT provider
+    // Keep connection alive (ALB has 60s idle timeout)
     let upstreamWs;
+    const pingInterval = setInterval(() => {
+      if (clientWs.readyState === WebSocket.OPEN) clientWs.ping();
+      if (upstreamWs && upstreamWs.readyState === WebSocket.OPEN) upstreamWs.ping();
+    }, 25000);
+
+    // Connect to upstream STT provider
     try {
       if (config.protocols) {
         // Deepgram: auth via subprotocols ["token", "key"]
@@ -189,6 +196,7 @@ app.prepare().then(() => {
     // Handle closes
     clientWs.on("close", () => {
       console.log("[STT-WS] Client disconnected");
+      clearInterval(pingInterval);
       if (upstreamWs.readyState === WebSocket.OPEN || upstreamWs.readyState === WebSocket.CONNECTING) {
         upstreamWs.terminate(); // terminate works for both OPEN and CONNECTING
       }
