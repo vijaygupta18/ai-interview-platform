@@ -216,7 +216,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               const decayAmount = Math.floor(elapsedMinutes / 5) * 0.5;
               const adjustedCount = Math.max(0, count - decayAmount);
               setProctoringWarnings(adjustedCount);
-              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100");
+              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
               if (count >= maxStrikes) setShowProctoringBan(true);
             }
           } catch (err) {
@@ -793,7 +793,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (weight > 0 && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + weight;
-          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100");
+          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
           if (next >= maxStrikes) {
             setShowProctoringBan(true);
           }
@@ -1187,12 +1187,28 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {/* STT Connection Status */}
-          <div className="flex items-center gap-1.5">
-            <span className={`inline-flex h-2 w-2 rounded-full ${stt.connected ? "bg-green-500" : stt.everConnected ? "bg-red-500" : "bg-yellow-500"}`} />
-            {!stt.connected && stt.everConnected && (
-              <span className="text-xs text-red-400">Reconnecting...</span>
-            )}
+          {/* STT Status + Retry */}
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex h-2 w-2 rounded-full ${stt.connected ? "bg-green-500" : stt.everConnected ? "bg-red-500 animate-pulse" : "bg-yellow-500"}`} />
+            <button
+              onClick={() => {
+                isProcessingRef.current = false;
+                setIsAIThinking(false);
+                setIsAISpeaking(false);
+                isAISpeakingRef.current = false;
+                if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
+                setCurrentAIText("");
+                stt.stop();
+                setTimeout(() => stt.start(), 500);
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-zinc-400 hover:text-white hover:bg-zinc-700/50 transition-all"
+              title="Click if interviewer is not responding or microphone seems stuck"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh mic
+            </button>
           </div>
           <AudioRecorder interviewId={interviewId} mediaStream={mediaStreamRef.current} enabled={isStarted} />
           <span className="relative flex h-2.5 w-2.5">
@@ -1420,7 +1436,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               : "bg-yellow-900/90 border-yellow-500/30 backdrop-blur"
           }`}>
             <div className="flex gap-1">
-              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100"), 10) }, (_, i) => i + 1).map((i) => (
+              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10"), 10) }, (_, i) => i + 1).map((i) => (
                 <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                   i <= proctoringWarnings
                     ? "bg-red-500 border-red-400 scale-110"
@@ -1429,7 +1445,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               ))}
             </div>
             <span className={`text-sm font-medium ${proctoringWarnings >= 3 ? "text-red-200" : "text-yellow-200"}`}>
-              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
+              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
             </span>
           </div>
         </div>

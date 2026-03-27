@@ -36,6 +36,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
   const browserRecRef = useRef<any>(null);
   const reconnectCountRef = useRef(0);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const stoppedRef = useRef(false); // prevents ghost restarts after stop()
   const finalBufferRef = useRef("");
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
@@ -239,7 +240,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
         // Natural end (browser timeout) — restart if interview active
         if (isStarted && !isEnding.current && !isAISpeaking.current) {
           setTimeout(() => {
-            if (isAISpeaking.current || isStopped) return;
+            if (isAISpeaking.current || isStopped || stoppedRef.current) return;
             try {
               recognition.start();
               setConnected(true);
@@ -268,7 +269,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
         } else if (!isAISpeaking.current && wasAISpeaking && isStopped) {
           wasAISpeaking = false;
           setTimeout(() => {
-            if (isAISpeaking.current) return;
+            if (isAISpeaking.current || stoppedRef.current) return;
             try {
               recognition.start();
               isStopped = false;
@@ -315,6 +316,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
   }, [providers, startDeepgram, startBrowser]);
 
   const start = useCallback(() => {
+    stoppedRef.current = false;
     providerIdxRef.current = 0;
     reconnectCountRef.current = 0;
     const first = providers[0];
@@ -327,6 +329,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
   }, [providers, startDeepgram, startBrowser, tryNextProvider]);
 
   const stop = useCallback(() => {
+    stoppedRef.current = true;
     if (dgSocketRef.current) { try { dgSocketRef.current.close(); } catch {} dgSocketRef.current = null; }
     if (mediaRecorderRef.current?.state === "recording") { try { mediaRecorderRef.current.stop(); } catch {} }
     if (browserRecRef.current) {
