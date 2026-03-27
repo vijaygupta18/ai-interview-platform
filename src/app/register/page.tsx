@@ -1,17 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+
+interface Organization {
+  id: string;
+  name: string;
+}
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [orgName, setOrgName] = useState("");
+  const [orgId, setOrgId] = useState("");
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/organizations")
+      .then((res) => res.json())
+      .then((data) => {
+        setOrganizations(data);
+        setOrgsLoading(false);
+      })
+      .catch(() => {
+        setOrgsLoading(false);
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +41,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name, orgName }),
+        body: JSON.stringify({ email, password, name, orgId }),
       });
 
       const data = await res.json();
@@ -32,26 +51,10 @@ export default function RegisterPage() {
         return;
       }
 
-      if (!data.isActive) {
-        // User needs admin activation
-        setError("");
-        setSuccess("Account created successfully! Please wait for your admin to activate your account before logging in.");
-        setLoading(false);
-        return;
-      }
-
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError("Account created but sign-in failed. Please try logging in.");
-        setLoading(false);
-      } else {
-        window.location.href = "/";
-      }
+      setError("");
+      setSuccess("Account created successfully! Please wait for your organization admin to activate your account before logging in.");
+      setLoading(false);
+      return;
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -186,16 +189,24 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="label">Organization Name</label>
-                <input
-                  type="text"
+                <label className="label">Organization</label>
+                <select
                   required
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  placeholder="Your company or team name"
+                  value={orgId}
+                  onChange={(e) => setOrgId(e.target.value)}
                   className="input-field !py-2.5"
-                />
-                <p className="text-xs text-gray-400 mt-1.5">A new organization will be created for your account</p>
+                  disabled={orgsLoading}
+                >
+                  <option value="">
+                    {orgsLoading ? "Loading organizations..." : "Select your organization"}
+                  </option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-amber-600 mt-1.5">Your account will need admin approval before you can access the platform</p>
               </div>
 
               <button

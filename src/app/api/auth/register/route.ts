@@ -5,18 +5,24 @@ import { pool } from "@/lib/db";
 
 export async function POST(req: Request) {
   try {
-    const { email, password, name, orgName } = await req.json();
+    const { email, password, name, orgId } = await req.json();
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "Email, password, and name are required" }, { status: 400 });
     }
 
-    if (!orgName?.trim()) {
-      return NextResponse.json({ error: "Organization name is required" }, { status: 400 });
+    if (!orgId) {
+      return NextResponse.json({ error: "Please select an organization" }, { status: 400 });
     }
 
     if (password.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    }
+
+    // Validate that the selected organization exists
+    const orgCheck = await pool.query("SELECT id FROM organizations WHERE id = $1", [orgId]);
+    if (orgCheck.rows.length === 0) {
+      return NextResponse.json({ error: "Selected organization does not exist" }, { status: 400 });
     }
 
     const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
@@ -27,14 +33,9 @@ export async function POST(req: Request) {
     const passwordHash = await bcrypt.hash(password, 12);
     const userId = uuidv4();
 
-    // All new users create their own org and become admin
-    const orgId = uuidv4();
-    const role = "admin";
-    const isActive = true;
-    await pool.query(
-      "INSERT INTO organizations (id, name, slug) VALUES ($1, $2, $3)",
-      [orgId, orgName.trim(), orgName.trim().toLowerCase().replace(/\s+/g, "-")]
-    );
+    // New users join existing org as inactive members — admin must activate
+    const role = "member";
+    const isActive = false;
 
     await pool.query(
       "INSERT INTO users (id, email, password_hash, name, org_id, role, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7)",
@@ -48,17 +49,13 @@ export async function POST(req: Request) {
       orgId,
       role,
       isActive,
-      message: "Account created and activated.",
+      message: "Account created. An admin must activate your account before you can log in.",
     });
   } catch (err: any) {
     console.error("Registration error:", err);
     if (err.code === "23505") {
-      // Unique constraint violation
       if (err.detail?.includes("email")) {
         return NextResponse.json({ error: "This email is already registered" }, { status: 409 });
-      }
-      if (err.detail?.includes("slug")) {
-        return NextResponse.json({ error: "An organization with this name already exists" }, { status: 409 });
       }
       return NextResponse.json({ error: "Account already exists" }, { status: 409 });
     }
