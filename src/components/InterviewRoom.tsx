@@ -1212,7 +1212,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               Refresh mic
             </button>
           </div>
-          <AudioRecorder interviewId={interviewId} mediaStream={mediaStream} enabled={isStarted} />
+          {/* AudioRecorder removed — recording timer was unreliable */}
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
