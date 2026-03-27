@@ -78,6 +78,13 @@ export async function POST(req: Request) {
     const ttsText = cleanedText
       .replace(/[*#_~`|<>{}[\]\\]/g, "")
       .replace(/\bhttps?:\/\/\S+/g, "")
+      .replace(/\b[\w.-]+@[\w.-]+\.\w+/g, "")
+      .replace(/(\d+)-(\w+)/g, "$1 $2")
+      .replace(/(\w+)-(\w+)/g, "$1 $2")
+      .replace(/[()]/g, "")
+      .replace(/[/:;]/g, " ")
+      .replace(/\.\.\./g, ".")
+      .replace(/—|–/g, ", ")
       .replace(/\n+/g, " ")
       .replace(/\s{2,}/g, " ")
       .trim();

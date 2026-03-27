@@ -11,8 +11,14 @@ function cleanForTTS(text: string): string {
     .replace(/[*#_~`|<>{}[\]\\]/g, "") // markdown/code chars
     .replace(/\bhttps?:\/\/\S+/g, "")  // URLs
     .replace(/\b[\w.-]+@[\w.-]+\.\w+/g, "") // emails
+    .replace(/(\d+)-(\w+)/g, "$1 $2")  // "30-minute" → "30 minute"
+    .replace(/(\w+)-(\w+)/g, "$1 $2")  // "real-time" → "real time"
+    .replace(/[()]/g, "")              // parentheses
+    .replace(/[/:;]/g, " ")            // slashes colons semicolons
+    .replace(/\.\.\./g, ".")           // ellipsis
+    .replace(/—|–/g, ", ")             // em/en dash → comma pause
     .replace(/\n+/g, " ")              // newlines to space
-    .replace(/\s{2,}/g, " ")           // collapse multiple spaces
+    .replace(/\s{2,}/g, " ")           // collapse spaces
     .trim();
 }
 
