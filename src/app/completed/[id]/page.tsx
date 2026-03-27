@@ -26,22 +26,25 @@ export default function CompletedPage() {
       {/* Confetti-like celebration dots */}
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none">
-          {Array.from({ length: 20 }).map((_, i) => (
+          {Array.from({ length: 20 }).map((_, i) => {
+            // Deterministic positions based on index (avoids SSR hydration mismatch from Math.random)
+            const seed = (i * 7 + 3) % 20;
+            return (
             <div
               key={i}
               className="absolute rounded-full animate-fade-in"
               style={{
-                width: `${4 + Math.random() * 6}px`,
-                height: `${4 + Math.random() * 6}px`,
-                left: `${10 + Math.random() * 80}%`,
-                top: `${5 + Math.random() * 40}%`,
+                width: `${4 + (seed % 6)}px`,
+                height: `${4 + ((seed * 3) % 6)}px`,
+                left: `${10 + ((seed * 17) % 80)}%`,
+                top: `${5 + ((seed * 13) % 40)}%`,
                 backgroundColor: ["#818cf8", "#34d399", "#fbbf24", "#f472b6", "#60a5fa"][i % 5],
                 opacity: 0,
                 animation: `fadeInUp 0.6s ease-out ${i * 80}ms forwards, fadeIn 2s ease-out ${i * 80 + 600}ms forwards`,
                 animationFillMode: "forwards",
               }}
             />
-          ))}
+          );})}
         </div>
       )}
 
