@@ -18,12 +18,17 @@ interface ProctoringProps {
 
 async function sendProctoringEvent(interviewId: string, type: string, severity: string, message: string, token?: string) {
   try {
-    await fetch("/api/proctor-event", {
+    const res = await fetch("/api/proctor-event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ interviewId, type, severity, message, token }),
     });
-  } catch {}
+    if (!res.ok) {
+      console.error(`[Proctoring] Failed to save event ${type}: HTTP ${res.status}`, await res.text().catch(() => ""));
+    }
+  } catch (err) {
+    console.error(`[Proctoring] Failed to send event ${type}:`, err);
+  }
 }
 
 export default function Proctoring({ videoRef, interviewId, enabled, onAlert, token }: ProctoringProps) {

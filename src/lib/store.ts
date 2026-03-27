@@ -255,8 +255,8 @@ export async function getProctoringViolationCount(interviewId: string): Promise<
 
 export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, "resume">[]> {
   const interviewQuery = orgId
-    ? "SELECT id, resume_file_name, candidate_email, candidate_name, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews WHERE org_id = $1 ORDER BY created_at DESC LIMIT 100"
-    : "SELECT id, resume_file_name, candidate_email, candidate_name, role, level, focus_areas, duration, round_type, language, status, scorecard, created_at, started_at, ended_at FROM interviews ORDER BY created_at DESC LIMIT 100";
+    ? "SELECT i.*, (SELECT count(*) FROM proctoring_events p WHERE p.interview_id = i.id AND p.severity = 'flag') as flag_count, (SELECT count(*) FROM proctoring_events p WHERE p.interview_id = i.id AND p.severity = 'warning') as warning_count FROM interviews i WHERE i.org_id = $1 ORDER BY i.created_at DESC LIMIT 100"
+    : "SELECT i.*, (SELECT count(*) FROM proctoring_events p WHERE p.interview_id = i.id AND p.severity = 'flag') as flag_count, (SELECT count(*) FROM proctoring_events p WHERE p.interview_id = i.id AND p.severity = 'warning') as warning_count FROM interviews i ORDER BY i.created_at DESC LIMIT 100";
   const { rows } = await pool.query(interviewQuery, orgId ? [orgId] : []);
 
   if (rows.length === 0) return [];
@@ -279,7 +279,10 @@ export async function getAllInterviews(orgId?: string): Promise<Omit<Interview, 
     language: row.language || "",
     status: row.status,
     transcript: [],
-    proctoring: [],
+    proctoring: [
+      ...Array(parseInt(row.flag_count) || 0).fill({ type: "flag", severity: "flag", message: "", timestamp: "" }),
+      ...Array(parseInt(row.warning_count) || 0).fill({ type: "warning", severity: "warning", message: "", timestamp: "" }),
+    ],
     scorecard: row.scorecard,
     createdAt: row.created_at?.toISOString(),
     startedAt: row.started_at?.toISOString() || null,
