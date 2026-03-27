@@ -31,6 +31,7 @@ interface Interview {
   id: string;
   resumeFileName: string;
   candidateEmail: string;
+  candidateName: string;
   role: string;
   level: string;
   focusAreas: string[];
@@ -500,8 +501,8 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{(interview as any).candidateName || interview.candidateEmail || interview.resumeFileName}</p>
-                        <p className="text-xs text-gray-500">{(interview as any).candidateName ? interview.candidateEmail : ""} {interview.role} &middot; {interview.level}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{interview.candidateName || interview.candidateEmail || interview.resumeFileName}</p>
+                        <p className="text-xs text-gray-500">{interview.candidateName && interview.candidateEmail ? `${interview.candidateEmail} · ` : ""}{interview.role} &middot; {interview.level}</p>
                       </div>
                       {statusBadge(interview.status)}
                     </div>
@@ -580,9 +581,9 @@ export default function DashboardPage() {
                         >
                           <td className="px-6 py-4">
                             <p className="text-sm font-medium text-gray-900">
-                              {(interview as any).candidateName || interview.candidateEmail || interview.resumeFileName}
+                              {interview.candidateName || interview.candidateEmail || interview.resumeFileName}
                             </p>
-                            {(interview as any).candidateName && (
+                            {interview.candidateName && (
                               <p className="text-xs text-gray-500 mt-0.5">{interview.candidateEmail}</p>
                             )}
                           </td>

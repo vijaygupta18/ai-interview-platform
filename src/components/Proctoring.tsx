@@ -72,16 +72,12 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
 
   // Tab switch detection is now handled by the combined window focus loss detector below
 
-  // Fullscreen exit detection
+  // Fullscreen exit detection — fires alert, InterviewRoom handles the mandatory re-enter prompt
   useEffect(() => {
     if (!enabled) return;
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
         alert("fullscreen_exit", "flag", "Candidate exited fullscreen mode");
-        // Try to re-enter fullscreen
-        setTimeout(() => {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }, 1000);
       }
     };
     document.addEventListener("fullscreenchange", handleFullscreenChange);

@@ -44,6 +44,7 @@ COPY --from=builder /app/migrations ./migrations
 # Note: we require pdf-parse/lib/pdf-parse.js directly to skip the buggy index.js
 COPY --from=builder /app/node_modules/pdf-parse ./node_modules/pdf-parse
 COPY --from=builder /app/node_modules/node-ensure ./node_modules/node-ensure
+COPY --from=builder /app/node_modules/ws ./node_modules/ws
 
 # Create data directories
 RUN mkdir -p data/recordings data/proctoring && \
@@ -56,4 +57,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -q --spider http://localhost:3000/api/health || exit 1
 
-CMD ["node", "server.js"]
+# Custom server with WebSocket STT proxy (wraps Next.js standalone server)
+COPY --from=builder /app/server-custom.js ./server-custom.js
+CMD ["node", "server-custom.js"]

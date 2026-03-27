@@ -14,8 +14,9 @@ export async function POST(req: Request) {
     const ttsProvider = getTTSProvider();
     const audioBuffer = await ttsProvider.synthesize(cleanedText);
 
-    return new NextResponse(new Uint8Array(audioBuffer), {
-      headers: { "Content-Type": ttsProvider.contentType },
+    return NextResponse.json({
+      audio: audioBuffer.toString("base64"),
+      contentType: ttsProvider.contentType,
     });
   } catch (error) {
     console.error("TTS error:", error);

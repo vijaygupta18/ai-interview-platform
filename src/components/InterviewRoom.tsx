@@ -49,6 +49,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [proctoringWarnings, setProctoringWarnings] = useState(0);
   const [showProctoringBan, setShowProctoringBan] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [needsFullscreenClick, setNeedsFullscreenClick] = useState(false);
+  const [fullscreenCountdown, setFullscreenCountdown] = useState(0);
   const [isEnding, setIsEnding] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -154,6 +156,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           setConsentGiven(true);
           setIsStarted(true);
           needsResumeRef.current = true;
+
+          // Browser blocks auto-fullscreen without user gesture — show mandatory prompt
+          if (!document.fullscreenElement) {
+            setNeedsFullscreenClick(true);
+          }
+
         }
       } catch (err) {
         console.error("Failed to initialize:", err);
@@ -344,7 +352,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      const audioBlob = await res.blob();
+      const data = await res.json();
+      if (!data.audio) throw new Error("No audio in TTS response");
+      const audioBytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0));
+      const audioBlob = new Blob([audioBytes], { type: data.contentType || "audio/mpeg" });
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       currentAudioRef.current = audio;
@@ -453,23 +464,20 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     const stream = mediaStreamRef.current;
     if (!stream) return;
 
-    // Fetch STT connection info from server (no API keys in browser)
-    let sttConfig: { provider: string; wsUrl: string; protocols?: string[] };
+    // Connect to our server-side STT WebSocket proxy (no API keys in browser)
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/stt-ws?token=${tokenRef.current}`;
+
+    // Fetch provider info for message parsing
     try {
       const sttRes = await fetch(`/api/stt-proxy?token=${tokenRef.current}`);
-      if (!sttRes.ok) {
-        console.error("[STT] Failed to get STT config:", sttRes.status);
-        return;
+      if (sttRes.ok) {
+        const sttConfig = await sttRes.json();
+        sttProviderRef.current = sttConfig.provider;
       }
-      sttConfig = await sttRes.json();
-    } catch (err) {
-      console.error("[STT] Failed to fetch STT config:", err);
-      return;
-    }
+    } catch {}
 
-    sttProviderRef.current = sttConfig.provider;
-
-    const dgSocket = new WebSocket(sttConfig.wsUrl, sttConfig.protocols || []);
+    const dgSocket = new WebSocket(wsUrl);
     dgSocketRef.current = dgSocket;
 
     dgSocket.onopen = () => {
@@ -507,8 +515,20 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       mediaRecorder.start(250);
     };
 
-    dgSocket.onmessage = (msg) => {
-      const data = JSON.parse(msg.data);
+    dgSocket.onmessage = async (msg) => {
+      // WebSocket proxy may send data as Blob or string
+      let raw: string;
+      if (msg.data instanceof Blob) {
+        raw = await msg.data.text();
+      } else {
+        raw = msg.data;
+      }
+      let data: any;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return; // skip non-JSON messages (binary audio, ping, etc.)
+      }
 
       // Provider-aware transcript parsing
       let text: string | undefined;
@@ -757,6 +777,36 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     return () => clearTimeout(timer);
   }, [showProctoringBan, interviewId]);
 
+  // Fullscreen enforcement — detect exit during interview, show 30s countdown to re-enter
+  useEffect(() => {
+    if (!isStarted || isEndingRef.current) return;
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && isStarted && !isEndingRef.current) {
+        setNeedsFullscreenClick(true);
+        setFullscreenCountdown(30);
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [isStarted]);
+
+  // Fullscreen countdown — auto-end interview if not re-entered within 30s
+  useEffect(() => {
+    if (!needsFullscreenClick || fullscreenCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setFullscreenCountdown((prev) => {
+        if (prev <= 1) {
+          // Time's up — end interview
+          setNeedsFullscreenClick(false);
+          handleEndInterview();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [needsFullscreenClick, fullscreenCountdown, handleEndInterview]);
+
   // Strike decay — reduce accumulated warnings by 0.5 every 5 minutes
   // This prevents early false positives from permanently harming the candidate
   useEffect(() => {
@@ -806,6 +856,41 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           >
             Go Back
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Mandatory Fullscreen Prompt (on resume or ESC exit) ───────────────────
+  if (needsFullscreenClick) {
+    return (
+      <div className="flex h-screen items-center justify-center px-4 bg-zinc-950">
+        <div className="glass w-full max-w-sm rounded-2xl p-8 text-center">
+          <div className="mb-4 text-4xl">&#128274;</div>
+          <h2 className="text-xl font-semibold text-white">Fullscreen Required</h2>
+          <p className="mt-3 text-sm text-zinc-400">
+            This interview must be conducted in fullscreen mode.
+          </p>
+          {fullscreenCountdown > 0 && (
+            <p className="mt-2 text-lg font-bold text-red-400">
+              Interview will end in {fullscreenCountdown}s
+            </p>
+          )}
+          <button
+            onClick={async () => {
+              try {
+                await document.documentElement.requestFullscreen();
+              } catch {}
+              setNeedsFullscreenClick(false);
+              setFullscreenCountdown(0);
+            }}
+            className="mt-6 rounded-lg bg-indigo-600 px-8 py-3 text-sm font-medium text-white transition hover:bg-indigo-500"
+          >
+            Enter Fullscreen & Resume
+          </button>
+          <p className="mt-3 text-xs text-zinc-500">
+            This is recorded as a proctoring violation.
+          </p>
         </div>
       </div>
     );
