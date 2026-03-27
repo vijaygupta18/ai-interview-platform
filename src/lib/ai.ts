@@ -240,7 +240,8 @@ async function callJuspayAI(
   temperature = 0.7
 ): Promise<string> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000); // 12s max
+  const timeoutMs = maxTokens > 1000 ? 60000 : 12000; // 60s for scorecard, 12s for interview
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   const res = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
     method: "POST",
