@@ -67,15 +67,15 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       const now = Date.now();
       const cooldowns: Record<string, number> = {
         second_monitor: 300000,
-        multiple_faces: 8000,
-        face_missing: 10000,
-        eye_away: 8000,
+        multiple_faces: 15000,
+        face_missing: 15000,
+        eye_away: 15000,
         devtools_open: 60000,
-        phone_detected: 20000,
-        fullscreen_exit: 5000,
-        window_blur: 5000,
+        phone_detected: 30000,
+        fullscreen_exit: 10000,
+        window_blur: 10000,
         virtual_camera: 300000,
-        copy_paste: 5000,
+        copy_paste: 10000,
       };
       const cooldown = cooldowns[type] || 5000;
       const lastTime = lastAlertTimeRef.current[type] || 0;
@@ -84,7 +84,14 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
 
       onAlert({ type, severity, message });
       sendProctoringEvent(interviewId, type, severity, message, token);
-      if (severity === "flag") captureViolationPhoto();
+      // Violation photo max 1 per 30s to prevent spam
+      if (severity === "flag") {
+        const lastPhoto = lastAlertTimeRef.current["_violation_photo"] || 0;
+        if (now - lastPhoto > 30000) {
+          lastAlertTimeRef.current["_violation_photo"] = now;
+          captureViolationPhoto();
+        }
+      }
     },
     [onAlert, interviewId, token, captureViolationPhoto]
   );
@@ -133,8 +140,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (!blurStart) return;
       const duration = Date.now() - blurStart;
       blurStart = 0;
-      if (duration > 1000) {
-        // Sustained loss >1s — definite flag
+      if (duration > 2000) {
+        // Sustained loss >2s — definite flag
         fireAlert(duration);
       } else {
         // Short blur — track frequency. 3+ short blurs in 60s = suspicious
@@ -155,7 +162,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       } else if (blurStart) {
         const duration = Date.now() - blurStart;
         blurStart = 0;
-        if (duration > 1000) fireAlert(duration);
+        if (duration > 2000) fireAlert(duration);
       }
     };
 
@@ -173,7 +180,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
           alert("window_blur", "flag", "Candidate left the interview window");
         }
       }
-    }, 3000);
+    }, 5000);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
