@@ -9,6 +9,9 @@ export class DeepgramTTS implements TTSProvider {
     if (!apiKey) throw new Error("DEEPGRAM_API_KEY not configured");
     if (!text || !text.trim()) throw new Error("Empty text for TTS");
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s TTS timeout
+
     const res = await fetch("https://api.deepgram.com/v1/speak?model=aura-angus-en", {
       method: "POST",
       headers: {
@@ -16,7 +19,9 @@ export class DeepgramTTS implements TTSProvider {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ text: text.trim() }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");

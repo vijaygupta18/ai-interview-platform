@@ -110,6 +110,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const isEndingRef = useRef(false);
   const isAISpeakingRef = useRef(false);
   const currentAITextRef = useRef("");
+  const generationRef = useRef(0);
+  const currentAbortRef = useRef<AbortController | null>(null);
   const speakTextRef = useRef<(text: string) => Promise<void>>();
   const needsResumeRef = useRef(false);
   const tokenRef = useRef("");
@@ -496,17 +498,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       isProcessingRef.current = true;
       setIsAIThinking(true);
 
-      // Safety timeout — if AI call hangs for >30s, force-reset
-      const safetyTimeout = setTimeout(() => {
-        if (isProcessingRef.current) {
-          console.error("[AI] Safety timeout — force resetting after 30s");
-          serverLog("error", "AI safety timeout — force reset after 30s", interviewId);
-          isProcessingRef.current = false;
-          setIsAIThinking(false);
-          setIsAISpeaking(false);
-          isAISpeakingRef.current = false;
-        }
-      }, 30000);
+      // Generation counter — prevents old pipelines from clobbering new ones
+      const genId = ++generationRef.current;
+      const isStale = () => generationRef.current !== genId || isEndingRef.current;
+
+      // AbortController for cancellation
+      const abortController = new AbortController();
+      currentAbortRef.current = abortController;
 
       try {
         // Streaming AI + TTS pipeline
@@ -514,7 +512,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ interviewId, transcript: currentTranscript, token: tokenRef.current, skipSave: options?.skipSave }),
+          signal: abortController.signal,
         });
+
+        if (isStale()) return;
 
         if (!res.ok || !res.body) {
           // Fallback to non-streaming
@@ -522,7 +523,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ interviewId, transcript: currentTranscript, token: tokenRef.current, skipSave: options?.skipSave }),
+            signal: abortController.signal,
           });
+          if (isStale()) return;
           const data = await fallbackRes.json();
           if (data.text) {
             setTranscript((prev) => [...prev, { role: "ai", text: data.text, timestamp: Date.now() }]);
@@ -550,17 +553,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         let fullText = "";
         const audioMap = new Map<number, { audio: string; contentType: string }>();
         let nextPlayIdx = 0;
+        let totalExpectedAudio = 0;
+        const skippedIdxs = new Set<number>();
         let isPlaying = false;
         let transcriptAdded = false;
         let streamDone = false;
 
         const playNext = async () => {
-          if (isPlaying || !audioMap.has(nextPlayIdx)) return;
+          if (isPlaying || isStale()) return;
+          // Skip missing chunks (TTS failed on server)
+          while (skippedIdxs.has(nextPlayIdx)) { nextPlayIdx++; skippedIdxs.delete(nextPlayIdx - 1); }
+          if (!audioMap.has(nextPlayIdx)) return;
           isPlaying = true;
           const chunk = audioMap.get(nextPlayIdx)!;
           audioMap.delete(nextPlayIdx);
           nextPlayIdx++;
           try {
+            if (isStale()) { isPlaying = false; return; }
             const audioBytes = Uint8Array.from(atob(chunk.audio), (c) => c.charCodeAt(0));
             const audioBlob = new Blob([audioBytes], { type: chunk.contentType || "audio/mpeg" });
             const audioUrl = URL.createObjectURL(audioBlob);
@@ -574,13 +583,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             });
           } catch {}
           isPlaying = false;
-          if (audioMap.has(nextPlayIdx)) playNext();
-          else if (streamDone && audioMap.size === 0) {
-            setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText(""); currentAudioRef.current = null;
-          }
+          if (!isStale()) playNext();
         };
 
         while (true) {
+          if (isStale()) { reader.cancel(); break; }
           const { done, value } = await reader.read();
           if (done) break;
           sseBuffer += decoder.decode(value, { stream: true });
@@ -590,32 +597,49 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             if (!line.startsWith("data: ")) continue;
             try {
               const data = JSON.parse(line.slice(6));
+
+              // Bug #4 fix: handle error events from server
+              if (data.error) {
+                console.error("[AI] Server error:", data.error);
+                serverLog("error", "AI stream error", interviewId, { error: data.error });
+                continue;
+              }
+
               if (data.type === "text") {
+                totalExpectedAudio++;
                 fullText += (fullText ? " " : "") + data.text;
                 setCurrentAIText(fullText);
                 if (!transcriptAdded) { transcriptAdded = true; setTranscript((prev) => [...prev, { role: "ai", text: data.text, timestamp: Date.now() }]); }
                 else { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: fullText }; return u; }); }
               }
               if (data.type === "audio") { audioMap.set(data.idx, { audio: data.audio, contentType: data.contentType }); playNext(); }
+              // Bug #2 fix: server sends skip event when TTS fails for an idx
+              if (data.type === "audio_skip") { skippedIdxs.add(data.idx); playNext(); }
               if (data.type === "done" && data.fullText) { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: data.fullText }; return u; }); }
             } catch {}
           }
         }
 
         streamDone = true;
+        // Wait max 10s for remaining audio (not 20s)
         let waitCount = 0;
-        while ((audioMap.size > 0 || isPlaying) && waitCount < 200) { await new Promise((r) => setTimeout(r, 100)); waitCount++; }
-        setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
-      } catch (err) {
+        while ((audioMap.size > 0 || isPlaying) && waitCount < 100 && !isStale()) {
+          await new Promise((r) => setTimeout(r, 100));
+          waitCount++;
+        }
+        if (!isStale()) {
+          setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
+        }
+      } catch (err: any) {
+        if (err.name === "AbortError") { console.log("[AI] Aborted"); return; }
         console.error("[AI] Response failed:", err);
         serverLog("error", "AI response failed", interviewId, { error: String(err) });
-        setIsAISpeaking(false);
-        isAISpeakingRef.current = false;
-        setCurrentAIText("");
+        setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
       } finally {
-        clearTimeout(safetyTimeout);
-        isProcessingRef.current = false;
-        setIsAIThinking(false);
+        if (generationRef.current === genId) {
+          isProcessingRef.current = false;
+          setIsAIThinking(false);
+        }
       }
     },
     [interviewId, speakText]
@@ -703,6 +727,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     isEndingRef.current = true;
     setIsEnding(true);
     setShowEndConfirm(false);
+
+    // Cancel any in-flight AI pipeline
+    if (currentAbortRef.current) currentAbortRef.current.abort();
+    isProcessingRef.current = false;
+    setIsAISpeaking(false);
+    isAISpeakingRef.current = false;
+    setIsAIThinking(false);
+    setCurrentAIText("");
 
     // Stop STT
     stt.stop();

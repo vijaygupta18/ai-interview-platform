@@ -368,11 +368,33 @@ SCORING APPROACH:
 6. If the candidate clearly knows the concept but STT garbled their explanation, give benefit of doubt
 7. Short answers are fine if they're correct and to the point — don't penalize brevity
 
-RECOMMENDATION GUIDE:
-- strong_hire: overall >= 4 AND no dimension below 3. Exceptional candidate for ${interview.level}.
-- hire: overall >= 3. Meets the bar. One weak dimension is OK if others compensate (e.g., strong technical but average communication is still hire for an SDE).
-- no_hire: overall < 2.5 OR critical role-specific dimension below 2 (e.g., technicalDepth < 2 for SDE, communication < 2 for Sales).
-- strong_no_hire: overall < 2 OR fundamental inability to answer basic questions OR clear dishonesty.
+ROLE-BASED DIMENSION WEIGHTAGE (use these weights when calculating overall score):
+${(() => {
+  const r = interview.role.toLowerCase();
+  if (r.includes("sde") || r.includes("engineer") || r.includes("developer") || r.includes("backend") || r.includes("frontend") || r.includes("fullstack"))
+    return "- technicalDepth: 35%, problemSolving: 25%, domainKnowledge: 20%, communication: 10%, cultureFit: 10%\n- A tech person with lower communication but strong technical skills is still a HIRE";
+  if (r.includes("product") || r.includes("pm"))
+    return "- problemSolving: 25%, communication: 25%, domainKnowledge: 20%, technicalDepth: 15%, cultureFit: 15%\n- PM needs strong communication + problem solving";
+  if (r.includes("sales") || r.includes("bd"))
+    return "- communication: 35%, domainKnowledge: 20%, cultureFit: 20%, problemSolving: 15%, technicalDepth: 10%\n- Sales needs excellent communication above all";
+  if (r.includes("hr") || r.includes("human resource"))
+    return "- communication: 30%, cultureFit: 25%, domainKnowledge: 20%, problemSolving: 15%, technicalDepth: 10%\n- HR needs empathy and communication";
+  if (r.includes("design") || r.includes("ux"))
+    return "- domainKnowledge: 30%, problemSolving: 25%, communication: 20%, technicalDepth: 15%, cultureFit: 10%\n- Designers need strong domain + problem solving";
+  if (r.includes("data") || r.includes("analyst"))
+    return "- technicalDepth: 30%, domainKnowledge: 25%, problemSolving: 25%, communication: 10%, cultureFit: 10%\n- Data roles need technical + domain depth";
+  if (r.includes("manager") || r.includes("director") || r.includes("lead") || r.includes("head") || r.includes("ceo") || r.includes("cto"))
+    return "- communication: 25%, problemSolving: 25%, cultureFit: 20%, domainKnowledge: 20%, technicalDepth: 10%\n- Leaders need communication + problem solving + culture";
+  if (r.includes("ops") || r.includes("operations"))
+    return "- problemSolving: 30%, domainKnowledge: 25%, communication: 20%, technicalDepth: 15%, cultureFit: 10%\n- Ops needs strong problem solving + domain";
+  return "- technicalDepth: 25%, communication: 20%, problemSolving: 20%, domainKnowledge: 20%, cultureFit: 15%\n- Balanced weights for this role";
+})()}
+
+RECOMMENDATION GUIDE (using weighted overall):
+- strong_hire: weighted overall >= 4 AND no dimension below 3. Exceptional candidate for ${interview.level}.
+- hire: weighted overall >= 3. Meets the bar. Low scores in non-critical dimensions are OK if role-critical dimensions are strong.
+- no_hire: weighted overall < 2.5 OR role-critical dimension below 2.
+- strong_no_hire: weighted overall < 2 OR fundamental inability to answer basic questions OR clear dishonesty.
 
 EVIDENCE: For each dimension, cite a candidate quote and explain the score. Note STT errors and interpret intended meaning. Include at least 3-4 evidence items. If the candidate improved over time, note that.
 
