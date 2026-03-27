@@ -48,7 +48,7 @@ export function getSTTConfig(): STTConfig {
   return {
     provider: "deepgram",
     language,
-    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=2000&vad_events=true`,
+    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=1200&vad_events=true`,
     headers: { Authorization: `Token ${apiKey}` },
     params: {},
   };

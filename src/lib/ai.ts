@@ -239,6 +239,9 @@ async function callJuspayAI(
   maxTokens = 300,
   temperature = 0.7
 ): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000); // 12s max
+
   const res = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -252,7 +255,9 @@ async function callJuspayAI(
       temperature,
       thinking: { type: "disabled" },
     }),
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const err = await res.text();
@@ -290,7 +295,7 @@ export async function getAIResponse(
     messages.push({ role: "user", content: "Start the interview now." });
   }
 
-  return callJuspayAI(messages, 1200, 0.7);
+  return callJuspayAI(messages, 400, 0.3);
 }
 
 export async function generateScorecard(interview: Interview): Promise<string> {

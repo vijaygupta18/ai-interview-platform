@@ -20,12 +20,7 @@ export async function GET(req: Request) {
 
   const config = getSTTConfig();
 
-  // Return WebSocket URL with auth embedded (auth is in the URL/protocol, not exposed as a standalone key)
   return NextResponse.json({
     provider: config.provider,
-    wsUrl: config.wsUrl,
-    protocols: config.provider === "deepgram"
-      ? ["token", process.env.DEEPGRAM_API_KEY || ""]
-      : [],
   });
 }

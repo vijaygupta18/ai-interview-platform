@@ -37,11 +37,33 @@ export class SarvamTTS implements TTSProvider {
   }
 
   private splitText(text: string, maxLen: number): string[] {
-    if (text.length <= maxLen) return [text];
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    if (!text || text.length <= maxLen) return [text || ""];
+    // Split on sentence boundaries OR at maxLen if no punctuation
+    const sentences = text.match(/[^.!?]*[.!?]+\s*/g);
+    if (!sentences) {
+      // No punctuation — split at word boundaries near maxLen
+      const chunks: string[] = [];
+      let start = 0;
+      while (start < text.length) {
+        if (start + maxLen >= text.length) {
+          chunks.push(text.substring(start).trim());
+          break;
+        }
+        let end = text.lastIndexOf(" ", start + maxLen);
+        if (end <= start) end = start + maxLen;
+        chunks.push(text.substring(start, end).trim());
+        start = end + 1;
+      }
+      return chunks.filter(Boolean);
+    }
+    // Handle trailing text after last punctuation
+    const matched = sentences.join("");
+    const trailing = text.substring(matched.length).trim();
+    const allParts = trailing ? [...sentences, trailing] : sentences;
+
     const chunks: string[] = [];
     let current = "";
-    for (const s of sentences) {
+    for (const s of allParts) {
       if ((current + s).length > maxLen && current) {
         chunks.push(current.trim());
         current = s;
@@ -50,6 +72,21 @@ export class SarvamTTS implements TTSProvider {
       }
     }
     if (current.trim()) chunks.push(current.trim());
-    return chunks;
+    // Sub-split any chunks still over maxLen
+    const result: string[] = [];
+    for (const chunk of chunks) {
+      if (chunk.length <= maxLen) {
+        result.push(chunk);
+      } else {
+        let start = 0;
+        while (start < chunk.length) {
+          let end = chunk.lastIndexOf(" ", start + maxLen);
+          if (end <= start) end = start + maxLen;
+          result.push(chunk.substring(start, end).trim());
+          start = end + 1;
+        }
+      }
+    }
+    return result.filter(Boolean);
   }
 }

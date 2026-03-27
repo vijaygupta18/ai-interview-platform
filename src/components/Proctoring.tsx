@@ -28,15 +28,17 @@ async function sendProctoringEvent(interviewId: string, type: string, severity: 
 
 export default function Proctoring({ videoRef, interviewId, enabled, onAlert, token }: ProctoringProps) {
   const faceDetectorRef = useRef<any>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const lastFaceTimeRef = useRef(Date.now());
+  const faceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const photoCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const phoneCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
   const lastTabSwitchRef = useRef(0);
   const photoCountRef = useRef(0);
+  const lastAlertTimeRef = useRef<Record<string, number>>({});
 
   const captureViolationPhoto = useCallback(() => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
+    const canvas = photoCanvasRef.current;
     if (!video || !canvas || video.readyState < 2) return;
     canvas.width = 160;
     canvas.height = 120;
@@ -54,21 +56,40 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (token) formData.append("token", token);
       fetch("/api/proctor-event", { method: "POST", body: formData }).catch(() => {});
     }, "image/webp", 0.3);
-  }, [videoRef, canvasRef, interviewId, token]);
+  }, [videoRef, interviewId, token]);
 
   const alert = useCallback(
     (type: string, severity: string, message: string) => {
+      const now = Date.now();
+      const cooldowns: Record<string, number> = {
+        second_monitor: 300000,
+        multiple_faces: 30000,
+        face_missing: 10000,
+        eye_away: 15000,
+        devtools_open: 60000,
+        phone_detected: 20000,
+        fullscreen_exit: 5000,
+        window_blur: 5000,
+        virtual_camera: 300000,
+        copy_paste: 5000,
+      };
+      const cooldown = cooldowns[type] || 5000;
+      const lastTime = lastAlertTimeRef.current[type] || 0;
+      if (now - lastTime < cooldown) return;
+      lastAlertTimeRef.current[type] = now;
+
       onAlert({ type, severity, message });
       sendProctoringEvent(interviewId, type, severity, message, token);
-      // Capture photo evidence for flag-severity violations
-      if (severity === "flag") {
-        captureViolationPhoto();
-      }
+      if (severity === "flag") captureViolationPhoto();
     },
     [onAlert, interviewId, token, captureViolationPhoto]
   );
 
-  useEffect(() => { canvasRef.current = document.createElement("canvas"); }, []);
+  useEffect(() => {
+    faceCanvasRef.current = document.createElement("canvas");
+    photoCanvasRef.current = document.createElement("canvas");
+    phoneCanvasRef.current = document.createElement("canvas");
+  }, []);
 
   // Tab switch detection is now handled by the combined window focus loss detector below
 
@@ -197,10 +218,10 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         } catch {}
       }
     };
-    // Check on mount and periodically (monitors can be connected during interview)
+    // Check on mount and on resize (monitors added/removed trigger resize)
     checkMultipleScreens();
-    const interval = setInterval(checkMultipleScreens, 30000);
-    return () => clearInterval(interval);
+    window.addEventListener("resize", checkMultipleScreens);
+    return () => window.removeEventListener("resize", checkMultipleScreens);
   }, [enabled, alert]);
 
   // DevTools detection
@@ -223,27 +244,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       }
     };
 
-    // Method 2: Console log timing detection
-    const checkConsole = () => {
-      const start = performance.now();
-      // debugger statement makes execution pause only when DevTools is open
-      // We use a safer approach: image with getter
-      const element = new Image();
-      Object.defineProperty(element, 'id', {
-        get: function() {
-          if (!devtoolsOpen) {
-            devtoolsOpen = true;
-            alert("devtools_open", "flag", "Developer tools detected — please close them");
-          }
-        }
-      });
-      console.log('%c', element as any);
-      console.clear();
-    };
-
     const interval = setInterval(checkDevTools, 5000);
-    // Run console check less frequently
-    const consoleInterval = setInterval(checkConsole, 15000);
 
     // Also block right-click context menu
     const blockContext = (e: MouseEvent) => {
@@ -264,7 +265,6 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
 
     return () => {
       clearInterval(interval);
-      clearInterval(consoleInterval);
       document.removeEventListener("contextmenu", blockContext);
       document.removeEventListener("keydown", blockShortcuts);
     };
@@ -282,28 +282,22 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
 
     const detect = async () => {
       const video = videoRef.current;
-      const canvas = canvasRef.current;
+      const canvas = faceCanvasRef.current;
       if (!video || !canvas || video.readyState < 2 || video.videoWidth === 0) return;
 
       if (faceDetectorRef.current) {
         try {
           const faces = await faceDetectorRef.current.detect(video);
           if (faces.length === 0) {
-            if (Date.now() - lastFaceTimeRef.current > 8000) {
-              alert("face_missing", "flag", "No face detected — please face the camera");
-              lastFaceTimeRef.current = Date.now();
-            }
+            alert("face_missing", "flag", "No face detected — please face the camera");
+          } else if (faces.length > 1) {
+            alert("multiple_faces", "flag", `${faces.length} faces detected`);
           } else {
-            lastFaceTimeRef.current = Date.now();
-            if (faces.length > 1) {
-              alert("multiple_faces", "flag", `${faces.length} faces detected`);
-            } else {
-              const face = faces[0];
-              const faceCenterX = face.boundingBox.x + face.boundingBox.width / 2;
-              const offset = Math.abs(faceCenterX - video.videoWidth / 2);
-              if (offset > video.videoWidth * 0.4) {
-                alert("eye_away", "flag", "Candidate appears to be looking away");
-              }
+            const face = faces[0];
+            const faceCenterX = face.boundingBox.x + face.boundingBox.width / 2;
+            const offset = Math.abs(faceCenterX - video.videoWidth / 2);
+            if (offset > video.videoWidth * 0.4) {
+              alert("eye_away", "flag", "Candidate appears to be looking away");
             }
           }
         } catch {}
@@ -324,14 +318,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
                          Math.abs(currentData[i+2] - prevFrameRef.current[i+2]);
             if (diff > 30) changedPixels++;
           }
-          // If very little motion AND no face detected via FaceDetector, likely absent
           if (changedPixels / totalPixels < 0.02) {
-            if (Date.now() - lastFaceTimeRef.current > 10000) {
-              alert("face_missing", "flag", "No movement detected — please face the camera");
-              lastFaceTimeRef.current = Date.now();
-            }
-          } else {
-            lastFaceTimeRef.current = Date.now();
+            alert("face_missing", "flag", "No movement detected — please face the camera");
           }
         }
         prevFrameRef.current = new Uint8ClampedArray(currentData);
@@ -377,7 +365,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     if (!enabled) return;
     const capture = () => {
       const video = videoRef.current;
-      const canvas = canvasRef.current;
+      const canvas = photoCanvasRef.current;
       if (!video || !canvas || video.readyState < 2) return;
       canvas.width = 160;
       canvas.height = 120;
@@ -410,7 +398,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     let consecutiveSuspicious = 0;
     const analyze = () => {
       const video = videoRef.current;
-      const canvas = canvasRef.current;
+      const canvas = phoneCanvasRef.current;
       if (!video || !canvas || video.readyState < 2) return;
       canvas.width = 160;
       canvas.height = 120;

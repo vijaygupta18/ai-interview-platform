@@ -13,7 +13,11 @@ if (fs.existsSync(envPath)) {
     const eqIdx = trimmed.indexOf("=");
     if (eqIdx === -1) continue;
     const key = trimmed.substring(0, eqIdx).trim();
-    const val = trimmed.substring(eqIdx + 1).trim();
+    let val = trimmed.substring(eqIdx + 1).trim();
+    // Strip surrounding quotes
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
     if (!process.env[key]) process.env[key] = val;
   }
 }
@@ -54,7 +58,7 @@ function getSTTProviderConfig() {
   const apiKey = process.env.DEEPGRAM_API_KEY || "";
   return {
     provider: "deepgram",
-    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=2000&vad_events=true`,
+    wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=1200&vad_events=true`,
     protocols: ["token", apiKey],
     headers: {},
     params: {},
@@ -139,6 +143,7 @@ app.prepare().then(() => {
       res.on("data", (chunk) => { body += chunk; });
       res.on("end", () => {
         console.error(`[STT-WS] Upstream rejected: ${res.statusCode} ${body.substring(0, 200)}`);
+        clientWs.close(1011, "STT provider unavailable");
       });
     });
 
@@ -184,8 +189,8 @@ app.prepare().then(() => {
     // Handle closes
     clientWs.on("close", () => {
       console.log("[STT-WS] Client disconnected");
-      if (upstreamWs.readyState === WebSocket.OPEN) {
-        upstreamWs.close();
+      if (upstreamWs.readyState === WebSocket.OPEN || upstreamWs.readyState === WebSocket.CONNECTING) {
+        upstreamWs.terminate(); // terminate works for both OPEN and CONNECTING
       }
     });
 
@@ -205,6 +210,18 @@ app.prepare().then(() => {
       }
     });
   });
+
+  // Graceful shutdown
+  function shutdown() {
+    console.log("[Server] Shutting down...");
+    wss.clients.forEach((ws) => ws.close(1001, "Server shutting down"));
+    wss.close();
+    pool.end();
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 5000); // Force exit after 5s
+  }
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 
   server.listen(port, hostname, () => {
     console.log(`> Ready on http://${hostname}:${port}`);

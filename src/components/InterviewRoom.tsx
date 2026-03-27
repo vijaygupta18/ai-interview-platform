@@ -19,6 +19,7 @@ interface InterviewData {
   focusAreas: string[];
   candidateName: string;
   duration: number; // in minutes
+  startedAt?: string;
 }
 
 interface ProctoringAlert {
@@ -84,10 +85,46 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finalTranscriptBufferRef = useRef("");
   const isEndingRef = useRef(false);
+  const isAISpeakingRef = useRef(false);
   const speakTextRef = useRef<(text: string) => Promise<void>>();
   const needsResumeRef = useRef(false);
   const reconnectCountRef = useRef(0);
   const tokenRef = useRef("");
+
+  const supportsFullscreen = typeof document !== "undefined" && typeof document.documentElement.requestFullscreen === "function";
+
+  // If browser doesn't support fullscreen, skip the prompt
+  useEffect(() => {
+    if (needsFullscreenClick && !supportsFullscreen) {
+      setNeedsFullscreenClick(false);
+      setFullscreenCountdown(0);
+    }
+  }, [needsFullscreenClick, supportsFullscreen]);
+
+  // Multi-tab protection — prevent same interview in multiple tabs
+  useEffect(() => {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(`interview-${interviewId}`);
+      channel.postMessage({ type: "tab-open", timestamp: Date.now() });
+      channel.onmessage = (e) => {
+        if (e.data.type === "tab-open") {
+          window.location.href = `/completed/${interviewId}`;
+        }
+      };
+      return () => channel.close();
+    } else {
+      // localStorage fallback for Safari < 15.4
+      const key = `interview-active-${interviewId}`;
+      const existing = localStorage.getItem(key);
+      if (existing && Date.now() - parseInt(existing) < 30000) {
+        window.location.href = `/completed/${interviewId}`;
+        return;
+      }
+      localStorage.setItem(key, String(Date.now()));
+      const interval = setInterval(() => localStorage.setItem(key, String(Date.now())), 10000);
+      return () => { clearInterval(interval); localStorage.removeItem(key); };
+    }
+  }, [interviewId]);
 
   // Fetch interview data on mount
   useEffect(() => {
@@ -158,7 +195,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           needsResumeRef.current = true;
 
           // Browser blocks auto-fullscreen without user gesture — show mandatory prompt
-          if (!document.fullscreenElement) {
+          if (!document.fullscreenElement && supportsFullscreen) {
             setNeedsFullscreenClick(true);
           }
 
@@ -238,11 +275,26 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           return s - 1;
         });
       }, 1000);
+
+      // Resync timer every 60s from server startedAt to prevent drift
+      const resync = setInterval(() => {
+        if (interviewData?.startedAt) {
+          const totalSeconds = (interviewData.duration || 30) * 60;
+          const elapsed = Math.floor((Date.now() - new Date(interviewData.startedAt).getTime()) / 1000);
+          const serverRemaining = Math.max(0, totalSeconds - elapsed);
+          setRemainingSeconds(serverRemaining);
+        }
+      }, 60000);
+
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        clearInterval(resync);
+      };
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isStarted, remainingSeconds > 0]);
+  }, [isStarted, remainingSeconds > 0, interviewData]);
 
   // Proctoring heartbeat — server detects if proctoring is silently disabled
   useEffect(() => {
@@ -281,6 +333,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     isEndingRef.current = true;
 
     async function autoEnd() {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+
       // Stop STT/recording first so no new speech comes in
       if (mediaRecorderRef.current?.state === "recording") {
         mediaRecorderRef.current.stop();
@@ -345,6 +402,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Combined AI + TTS: one request, returns audio with text in header
   const speakText = useCallback(async (text: string) => {
     setIsAISpeaking(true);
+    isAISpeakingRef.current = true;
     setCurrentAIText(text);
     try {
       const res = await fetch("/api/tts", {
@@ -362,6 +420,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       await new Promise<void>((resolve, reject) => {
         audio.onended = () => {
           setIsAISpeaking(false);
+          isAISpeakingRef.current = false;
           setCurrentAIText("");
           currentAudioRef.current = null;
           URL.revokeObjectURL(audioUrl);
@@ -369,6 +428,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         };
         audio.onerror = (e) => {
           setIsAISpeaking(false);
+          isAISpeakingRef.current = false;
           setCurrentAIText("");
           URL.revokeObjectURL(audioUrl);
           reject(e);
@@ -378,6 +438,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     } catch (err) {
       console.error("TTS failed:", err);
       setIsAISpeaking(false);
+      isAISpeakingRef.current = false;
       setCurrentAIText("");
     }
   }, []);
@@ -386,6 +447,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const getAIResponse = useCallback(
     async (currentTranscript: TranscriptEntry[], options?: { skipSave?: boolean }) => {
       if (isProcessingRef.current) return;
+      if (isEndingRef.current) return;
       isProcessingRef.current = true;
       try {
         // Single combined endpoint: AI + TTS in one call
@@ -405,6 +467,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
           // Play audio immediately from base64
           setIsAISpeaking(true);
+          isAISpeakingRef.current = true;
           setCurrentAIText(aiText);
           const audioBytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0));
           const audioBlob = new Blob([audioBytes], { type: data.contentType || "audio/mpeg" });
@@ -414,6 +477,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           await new Promise<void>((resolve, reject) => {
             audio.onended = () => {
               setIsAISpeaking(false);
+              isAISpeakingRef.current = false;
               setCurrentAIText("");
               currentAudioRef.current = null;
               URL.revokeObjectURL(audioUrl);
@@ -421,6 +485,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             };
             audio.onerror = (e) => {
               setIsAISpeaking(false);
+              isAISpeakingRef.current = false;
               setCurrentAIText("");
               URL.revokeObjectURL(audioUrl);
               reject(e);
@@ -451,6 +516,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     const watchdog = setInterval(() => {
       const silenceSec = (Date.now() - lastActivityRef.current) / 1000;
       // Only nudge if: 45s silence AND no interim speech AND AI not speaking AND not processing
+      if (!micEnabled) return; // Don't nudge when deliberately muted
       if (silenceSec > 45 && !interimTranscript && !isProcessingRef.current && !isAISpeaking) {
         console.log("[Watchdog] 45s silence, nudging AI...");
         getAIResponse([...transcript, { role: "candidate", text: "(candidate is waiting)", timestamp: Date.now() }], { skipSave: true });
@@ -458,11 +524,21 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }
     }, 10000);
     return () => clearInterval(watchdog);
-  }, [isStarted, isAISpeaking, interimTranscript, getAIResponse, transcript]);
+  }, [isStarted, isAISpeaking, interimTranscript, micEnabled, getAIResponse, transcript]);
 
   const startDeepgramSTT = useCallback(async () => {
     const stream = mediaStreamRef.current;
     if (!stream) return;
+
+    // Clean up any existing connection before creating a new one
+    if (dgSocketRef.current) {
+      try { dgSocketRef.current.close(); } catch {}
+      dgSocketRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state === "recording") {
+      try { mediaRecorderRef.current.stop(); } catch {}
+      mediaRecorderRef.current = null;
+    }
 
     // Connect to our server-side STT WebSocket proxy (no API keys in browser)
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -516,6 +592,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     };
 
     dgSocket.onmessage = async (msg) => {
+      // Skip STT processing while AI is speaking (prevents echo feedback)
+      if (isAISpeakingRef.current) return;
+
       // WebSocket proxy may send data as Blob or string
       let raw: string;
       if (msg.data instanceof Blob) {
@@ -779,6 +858,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   // Fullscreen enforcement — detect exit during interview, show 30s countdown to re-enter
   useEffect(() => {
+    if (!supportsFullscreen) return; // Skip on iOS
     if (!isStarted || isEndingRef.current) return;
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement && isStarted && !isEndingRef.current) {
@@ -1126,6 +1206,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // ─── Main Interview Screen ────────────────────────────────────────────────
   return (
     <div className="flex h-screen flex-col">
+      {/* Muted mic warning */}
+      {!micEnabled && isStarted && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium animate-pulse">
+          Microphone is muted — your voice is not being captured
+        </div>
+      )}
       {/* Top Bar */}
       <div className="glass flex items-center justify-between px-3 sm:px-6 py-3">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
