@@ -29,6 +29,21 @@ interface ProctoringAlert {
   timestamp: number;
 }
 
+// Detect if STT text is echo of AI's voice (mic picking up speakers)
+function isEchoOfAI(sttText: string, aiText: string): boolean {
+  if (!sttText || !aiText) return false;
+  const stt = sttText.toLowerCase().trim();
+  const ai = aiText.toLowerCase().trim();
+  if (stt.length < 5) return false;
+  // Check if STT text is a substring of AI text (exact echo)
+  if (ai.includes(stt) || stt.includes(ai.substring(0, Math.min(ai.length, 50)))) return true;
+  // Check word overlap — if >60% of STT words are in AI text, it's echo
+  const sttWords = stt.split(/\s+/);
+  const aiWords = new Set(ai.split(/\s+/));
+  const overlap = sttWords.filter(w => aiWords.has(w)).length;
+  return sttWords.length > 2 && overlap / sttWords.length > 0.6;
+}
+
 // Send critical frontend logs to server for debugging
 function serverLog(level: "info" | "warn" | "error", message: string, interviewId?: string, data?: any) {
   fetch("/api/client-log", {
@@ -55,7 +70,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [proctoringAlerts, setProctoringAlerts] = useState<ProctoringAlert[]>([]);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
-  const [currentAIText, setCurrentAIText] = useState("");
+  const [currentAIText, _setCurrentAIText] = useState("");
+  const setCurrentAIText = (text: string) => { _setCurrentAIText(text); currentAITextRef.current = text; };
   const [interimTranscript, setInterimTranscript] = useState("");
   const [proctoringWarnings, setProctoringWarnings] = useState(0);
   const [showProctoringBan, setShowProctoringBan] = useState(false);
@@ -96,6 +112,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const finalTranscriptBufferRef = useRef("");
   const isEndingRef = useRef(false);
   const isAISpeakingRef = useRef(false);
+  const currentAITextRef = useRef("");
   const speakTextRef = useRef<(text: string) => Promise<void>>();
   const needsResumeRef = useRef(false);
   const reconnectCountRef = useRef(0);
@@ -788,8 +805,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }
 
       {
-        // Interrupt: if candidate speaks while AI is talking, stop AI audio
-        if (isAISpeakingRef.current && text && text.trim().length > 3) {
+        // During AI speech: filter echo (mic picking up AI's voice from speakers)
+        if (isAISpeakingRef.current) {
+          if (!text || text.trim().length <= 3) return; // skip noise
+          // Check if this is echo of what the AI is currently saying
+          const currentAI = currentAITextRef?.current || "";
+          if (isEchoOfAI(text, currentAI)) {
+            console.log("[STT] Echo filtered:", text.substring(0, 40));
+            return;
+          }
+          // Not echo — real interrupt from candidate
           console.log("[Interrupt] Candidate speaking over AI — stopping playback");
           if (currentAudioRef.current) {
             currentAudioRef.current.pause();
@@ -799,9 +824,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           isAISpeakingRef.current = false;
           setCurrentAIText("");
         }
-
-        // Skip empty/noise during AI speech (short utterances < 3 chars are likely echo)
-        if (isAISpeakingRef.current && (!text || text.trim().length <= 3)) return;
 
         console.log("[STT]", { text: text?.substring(0, 50), isFinal, speechFinal });
 
@@ -891,12 +913,18 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         const text = result[0].transcript;
         const isFinal = result.isFinal;
 
-        // Interrupt: if candidate speaks while AI is talking, stop AI audio
-        if (isAISpeakingRef.current && isFinal && text.trim().length > 3) {
+        // During AI speech: filter echo
+        if (isAISpeakingRef.current) {
+          if (!isFinal || text.trim().length <= 3) return;
+          const currentAI = currentAITextRef?.current || "";
+          if (isEchoOfAI(text, currentAI)) {
+            console.log("[STT] Echo filtered:", text.substring(0, 40));
+            return;
+          }
+          // Real interrupt
           if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
           setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
         }
-        if (isAISpeakingRef.current) return;
 
         if (!isFinal) {
           setInterimTranscript(text);
@@ -1270,7 +1298,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           <p className="mt-3 text-center text-sm leading-relaxed text-zinc-400">
             This interview will be recorded and monitored for quality and integrity purposes. By proceeding, you consent to:
           </p>
-          <ul className="mt-4 space-y-2.5">
+          <div className="mt-4 mb-3 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+            <span className="text-amber-400 text-lg">🎧</span>
+            <span className="text-sm text-amber-200">Please use headphones for the best experience and to avoid audio echo.</span>
+          </div>
+          <ul className="space-y-2.5">
             {[
               "Video and audio recording",
               "AI-powered proctoring (face detection, eye tracking, tab/window monitoring, periodic photo capture)",
