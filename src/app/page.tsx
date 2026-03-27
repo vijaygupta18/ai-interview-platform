@@ -90,6 +90,8 @@ export default function DashboardPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [scoringIds, setScoringIds] = useState<Set<string>>(new Set());
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const pageSize = 10;
 
   const fetchInterviews = useCallback(async () => {
@@ -167,6 +169,13 @@ export default function DashboardPage() {
       );
     }
 
+    if (dateFrom) {
+      result = result.filter((i) => new Date(i.createdAt) >= new Date(dateFrom));
+    }
+    if (dateTo) {
+      result = result.filter((i) => new Date(i.createdAt) <= new Date(dateTo + "T23:59:59"));
+    }
+
     const statusOrder: Record<string, number> = { in_progress: 0, waiting: 1, completed: 2 };
 
     result = [...result].sort((a, b) => {
@@ -182,7 +191,7 @@ export default function DashboardPage() {
     });
 
     return result;
-  }, [interviews, statusFilter, verdictFilter, search, sortField, sortDir]);
+  }, [interviews, statusFilter, verdictFilter, search, dateFrom, dateTo, sortField, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginatedFiltered = useMemo(() => {
@@ -191,7 +200,7 @@ export default function DashboardPage() {
   }, [filtered, currentPage, pageSize]);
 
   // Reset to page 1 when filters change
-  useEffect(() => { setCurrentPage(1); }, [statusFilter, verdictFilter, search]);
+  useEffect(() => { setCurrentPage(1); }, [statusFilter, verdictFilter, search, dateFrom, dateTo]);
 
   const stats = useMemo(() => {
     const scored = interviews.filter((i) => i.scorecard);
@@ -240,7 +249,7 @@ export default function DashboardPage() {
 
   const SortIcon = ({ field }: { field: SortField }) => (
     <svg
-      className={`w-3.5 h-3.5 ml-1 inline-block transition-transform ${sortField === field ? "text-indigo-600" : "text-gray-400"} ${sortField === field && sortDir === "asc" ? "rotate-180" : ""}`}
+      className={`w-3.5 h-3.5 ml-1 inline-block transition-all duration-200 ${sortField === field ? "text-indigo-600" : "text-gray-400"} ${sortField === field && sortDir === "asc" ? "rotate-180" : ""}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -326,72 +335,108 @@ export default function DashboardPage() {
         </div>
 
         {/* Search + Filters */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 mb-6 animate-fade-in-up delay-3">
-          <div className="relative flex-1">
-            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search by name, email, or role..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="input-field !pl-11"
-            />
+        <div className="flex flex-col gap-3 mb-6 animate-fade-in-up delay-3">
+          {/* Row 1: Search + Date Range + Export */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search by name, email, or role..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 pl-11 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-700 transition-all duration-200 placeholder:text-gray-400"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <svg className="w-4 h-4 text-gray-400 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-700 transition-all duration-200"
+              />
+              <span className="text-gray-400 text-sm">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-700 transition-all duration-200"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(""); setDateTo(""); }}
+                  className="px-2.5 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                  title="Clear dates"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={exportCSV}
+              disabled={filtered.length === 0}
+              className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export CSV
+            </button>
           </div>
 
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            {[
-              { key: "all", label: "All" },
-              { key: "waiting", label: "Pending" },
-              { key: "in_progress", label: "Active" },
-              { key: "completed", label: "Completed" },
-            ].map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setStatusFilter(f.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  statusFilter === f.key
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          {/* Row 2: Status Pills + Verdict Pills */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="flex items-center gap-1 rounded-lg p-1 border border-gray-200 bg-gray-50/50">
+              {[
+                { key: "all", label: "All" },
+                { key: "waiting", label: "Pending" },
+                { key: "in_progress", label: "Active" },
+                { key: "completed", label: "Completed" },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setStatusFilter(f.key)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                    statusFilter === f.key
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            {[
-              { key: "all", label: "All Verdicts" },
-              { key: "hire", label: "Hire" },
-              { key: "no_hire", label: "No Hire" },
-              { key: "unscored", label: "Unscored" },
-            ].map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setVerdictFilter(f.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  verdictFilter === f.key
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            <div className="flex items-center gap-1 rounded-lg p-1 border border-gray-200 bg-gray-50/50">
+              {[
+                { key: "all", label: "All Verdicts" },
+                { key: "hire", label: "Hire" },
+                { key: "no_hire", label: "No Hire" },
+                { key: "unscored", label: "Unscored" },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setVerdictFilter(f.key)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                    verdictFilter === f.key
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
-
-          <button
-            onClick={exportCSV}
-            disabled={filtered.length === 0}
-            className="btn-secondary flex items-center gap-2 text-xs whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export CSV
-          </button>
         </div>
 
         {/* Content */}
@@ -476,13 +521,22 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="card p-12 text-center animate-scale-in">
-            <p className="text-gray-500">No interviews match your filters</p>
+          <div className="card p-16 text-center animate-scale-in">
+            <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <p className="text-lg font-semibold text-gray-900 mb-1">No interviews found</p>
+            <p className="text-sm text-gray-500 mb-4">Try adjusting your search or filter criteria.</p>
             <button
-              onClick={() => { setSearch(""); setStatusFilter("all"); }}
-              className="text-sm text-indigo-600 hover:text-indigo-800 mt-2 transition-colors"
+              onClick={() => { setSearch(""); setStatusFilter("all"); setVerdictFilter("all"); setDateFrom(""); setDateTo(""); }}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-all duration-200"
             >
-              Clear filters
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Clear all filters
             </button>
           </div>
         ) : (
@@ -521,9 +575,9 @@ export default function DashboardPage() {
                   </Link>
                 );
               })}
-              <div className="text-center py-2">
-                <p className="text-xs text-gray-400">
-                  {filtered.length} of {interviews.length} interview{interviews.length !== 1 ? "s" : ""}
+              <div className="text-center py-3">
+                <p className="text-xs text-gray-500">
+                  Showing {filtered.length} of {interviews.length} interview{interviews.length !== 1 ? "s" : ""}
                 </p>
               </div>
             </div>
@@ -576,7 +630,7 @@ export default function DashboardPage() {
                       return (
                         <tr
                           key={interview.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-all duration-200 hover:border-l-2 hover:border-l-indigo-500 animate-table-row"
+                          className="border-b border-gray-100 hover:bg-gray-50/80 transition-all duration-200 animate-table-row"
                           style={{ animationDelay: `${idx * 50}ms`, opacity: 0 }}
                         >
                           <td className="px-6 py-4">
@@ -650,7 +704,7 @@ export default function DashboardPage() {
                             <div className="flex items-center gap-2">
                               <Link
                                 href={`/dashboard/${interview.id}`}
-                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+                                className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-all duration-200"
                               >
                                 View
                               </Link>
@@ -694,7 +748,7 @@ export default function DashboardPage() {
                                       btn.disabled = false;
                                     }
                                   }}
-                                  className="btn-secondary text-xs !px-3 !py-1.5"
+                                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                                 >
                                   {scoringIds.has(interview.id) ? "Scoring..." : interview.scorecard ? "Rescore" : "Score"}
                                 </button>
@@ -709,7 +763,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Footer with pagination */}
-              <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+              <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between bg-gray-50/80">
                 <p className="text-xs text-gray-500">
                   Showing {Math.min((currentPage - 1) * pageSize + 1, filtered.length)}-{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length} interview{filtered.length !== 1 ? "s" : ""}
                 </p>
@@ -718,7 +772,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="px-2.5 py-1 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                     >
                       Prev
                     </button>
@@ -737,15 +791,15 @@ export default function DashboardPage() {
                       }
                       return pages.map((page) =>
                         typeof page === "string" ? (
-                          <span key={page} className="w-7 h-7 flex items-center justify-center text-xs text-gray-400">...</span>
+                          <span key={page} className="w-8 h-8 flex items-center justify-center text-xs text-gray-400">...</span>
                         ) : (
                           <button
                             key={page}
                             onClick={() => setCurrentPage(page)}
-                            className={`w-7 h-7 rounded-md text-xs font-medium transition-all ${
+                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-all duration-200 ${
                               currentPage === page
                                 ? "bg-indigo-600 text-white shadow-sm"
-                                : "text-gray-600 hover:bg-gray-200"
+                                : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:shadow-sm"
                             }`}
                           >
                             {page}
@@ -756,7 +810,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-2.5 py-1 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                     >
                       Next
                     </button>
