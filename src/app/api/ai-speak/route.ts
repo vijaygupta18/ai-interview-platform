@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     }
 
     // Server-side proctoring enforcement
-    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100");
     if (violations >= MAX_STRIKES) {
       await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
       return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });

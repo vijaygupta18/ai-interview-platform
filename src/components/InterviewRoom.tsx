@@ -30,6 +30,23 @@ interface ProctoringAlert {
   timestamp: number;
 }
 
+// Pipe ALL console logs to server (for local testing/debugging)
+if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+  const _origLog = console.log;
+  const _origWarn = console.warn;
+  const _origError = console.error;
+  const _send = (level: string, args: any[]) => {
+    fetch("/api/client-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level, message: args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" ") }),
+    }).catch(() => {});
+  };
+  console.log = (...args) => { _origLog(...args); _send("info", args); };
+  console.warn = (...args) => { _origWarn(...args); _send("warn", args); };
+  console.error = (...args) => { _origError(...args); _send("error", args); };
+}
+
 // Send critical frontend logs to server for debugging
 function serverLog(level: "info" | "warn" | "error", message: string, interviewId?: string, data?: any) {
   fetch("/api/client-log", {
@@ -199,7 +216,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               const decayAmount = Math.floor(elapsedMinutes / 5) * 0.5;
               const adjustedCount = Math.max(0, count - decayAmount);
               setProctoringWarnings(adjustedCount);
-              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100");
               if (count >= maxStrikes) setShowProctoringBan(true);
             }
           } catch (err) {
@@ -623,7 +640,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   // ─── STT Hook ──────────────────────────────────────────────────────────────
   const stt = useSTT({
-    providers: ["deepgram", "browser"],
+    providers: ["browser", "deepgram"],
     interviewId,
     token: tokenRef.current,
     isAISpeaking: isAISpeakingRef,
@@ -776,7 +793,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (weight > 0 && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + weight;
-          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100");
           if (next >= maxStrikes) {
             setShowProctoringBan(true);
           }
@@ -1403,7 +1420,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               : "bg-yellow-900/90 border-yellow-500/30 backdrop-blur"
           }`}>
             <div className="flex gap-1">
-              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10"), 10) }, (_, i) => i + 1).map((i) => (
+              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100"), 10) }, (_, i) => i + 1).map((i) => (
                 <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                   i <= proctoringWarnings
                     ? "bg-red-500 border-red-400 scale-110"
@@ -1412,7 +1429,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               ))}
             </div>
             <span className={`text-sm font-medium ${proctoringWarnings >= 3 ? "text-red-200" : "text-yellow-200"}`}>
-              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
+              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "100") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
             </span>
           </div>
         </div>

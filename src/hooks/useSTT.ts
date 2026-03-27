@@ -51,14 +51,15 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     if (!text.trim()) return;
     finalBufferRef.current += (finalBufferRef.current ? " " : "") + text;
 
-    // Reset silence timer — wait 1s of idle then send to AI
+    // Reset silence timer — wait 2s of idle then send to AI
+    // (gives candidate time to pause and continue without being cut off)
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(() => {
       const full = finalBufferRef.current.trim();
       if (!full) return;
       finalBufferRef.current = "";
       onCompleteRef.current(full);
-    }, 1000);
+    }, 1500);
   }, []);
 
   const handleInterimText = useCallback((text: string) => {
@@ -150,7 +151,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
               if (!full) return;
               finalBufferRef.current = "";
               onCompleteRef.current(full);
-            }, 1000); // Same 1s wait — consistent, gives candidate time to continue
+            }, 1500); // Same 2s wait — consistent, gives candidate time to continue
           }
         } else if (!isFinal && text) {
           handleInterimText(text);
@@ -233,22 +234,64 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       recognition.onend = () => {
         console.log("[STT:browser] Ended");
         setConnected(false);
-        if (isStarted && !isEnding.current) {
-          // Try restart after delay
+        // If stopped by echoGuard, don't restart — echoGuard handles it
+        if (isStopped) return;
+        // Natural end (browser timeout) — restart if interview active
+        if (isStarted && !isEnding.current && !isAISpeaking.current) {
           setTimeout(() => {
+            if (isAISpeaking.current || isStopped) return;
             try {
               recognition.start();
               setConnected(true);
+              console.log("[STT:browser] Auto-restarted");
             } catch {
               console.warn("[STT:browser] Restart failed, trying next provider");
               tryNextProvider();
             }
-          }, 300);
+          }, 500);
         }
       };
 
       recognition.start();
       browserRecRef.current = recognition;
+
+      // Manage start/stop when AI speaks/stops (prevents echo)
+      let wasAISpeaking = false;
+      let isStopped = false;
+      let startFailCount = 0;
+      const echoGuard = setInterval(() => {
+        if (isAISpeaking.current && !isStopped) {
+          isStopped = true;
+          wasAISpeaking = true;
+          try { recognition.abort(); } catch {}
+          console.log("[STT:browser] Paused (AI speaking)");
+        } else if (!isAISpeaking.current && wasAISpeaking && isStopped) {
+          wasAISpeaking = false;
+          setTimeout(() => {
+            if (isAISpeaking.current) return;
+            try {
+              recognition.start();
+              isStopped = false;
+              startFailCount = 0;
+              setConnected(true);
+              console.log("[STT:browser] Resumed");
+            } catch {
+              startFailCount++;
+              console.warn(`[STT:browser] Resume failed (${startFailCount}/3)`);
+              if (startFailCount >= 3) {
+                console.error("[STT:browser] 3 failed resumes — falling back to Deepgram");
+                clearInterval(echoGuard);
+                tryNextProvider();
+              }
+            }
+          }, 500);
+        }
+      }, 300);
+
+      // Store cleanup ref
+      const origStop = recognition.stop.bind(recognition);
+      recognition._echoGuard = echoGuard;
+
       return true;
     } catch {
       return false;
@@ -286,7 +329,11 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
   const stop = useCallback(() => {
     if (dgSocketRef.current) { try { dgSocketRef.current.close(); } catch {} dgSocketRef.current = null; }
     if (mediaRecorderRef.current?.state === "recording") { try { mediaRecorderRef.current.stop(); } catch {} }
-    if (browserRecRef.current) { try { browserRecRef.current.stop(); } catch {} browserRecRef.current = null; }
+    if (browserRecRef.current) {
+      if (browserRecRef.current._echoGuard) clearInterval(browserRecRef.current._echoGuard);
+      try { browserRecRef.current.stop(); } catch {}
+      browserRecRef.current = null;
+    }
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     setConnected(false);
     setActiveProvider(null);
