@@ -133,8 +133,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (!blurStart) return;
       const duration = Date.now() - blurStart;
       blurStart = 0;
-      if (duration > 2000) {
-        // Sustained loss >2s — definite flag
+      if (duration > 1000) {
+        // Sustained loss >1s — definite flag
         fireAlert(duration);
       } else {
         // Short blur — track frequency. 3+ short blurs in 60s = suspicious
@@ -155,7 +155,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       } else if (blurStart) {
         const duration = Date.now() - blurStart;
         blurStart = 0;
-        if (duration > 2000) fireAlert(duration);
+        if (duration > 1000) fireAlert(duration);
       }
     };
 
@@ -289,6 +289,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   // Chrome native FaceDetector used as immediate fallback while MediaPipe loads
   const nativeFaceDetectorRef = useRef<any>(null);
   const mediaPipeDetectorRef = useRef<any>(null);
+  const detectionFailedRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -308,18 +309,29 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         const vision = await import("@mediapipe/tasks-vision");
         const { FaceDetector, FilesetResolver } = vision;
         const filesetResolver = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
         );
         if (cancelled) return;
-        mediaPipeDetectorRef.current = await FaceDetector.createFromOptions(filesetResolver, {
-          baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite",
-            delegate: "GPU",
-          },
-          runningMode: "IMAGE",
-          minDetectionConfidence: 0.5,
-        });
-        console.log("[Proctoring] MediaPipe FaceDetector loaded");
+        // Try GPU first, then CPU
+        let loaded = false;
+        for (const delegate of ["GPU", "CPU"] as const) {
+          try {
+            mediaPipeDetectorRef.current = await FaceDetector.createFromOptions(filesetResolver, {
+              baseOptions: {
+                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite",
+                delegate,
+              },
+              runningMode: "IMAGE",
+              minDetectionConfidence: 0.5,
+            });
+            console.log(`[Proctoring] MediaPipe FaceDetector loaded (${delegate})`);
+            loaded = true;
+            break;
+          } catch (e) {
+            console.warn(`[Proctoring] MediaPipe ${delegate} failed:`, e);
+          }
+        }
+        if (!loaded) console.error("[Proctoring] MediaPipe FaceDetector unavailable");
       } catch (err) {
         console.warn("[Proctoring] MediaPipe FaceDetector failed:", err);
       }
@@ -352,6 +364,14 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         } catch {}
       }
 
+      if (faceCount === -1 && !detectionFailedRef.current) {
+        detectionFailedRef.current = true;
+        console.error("[Proctoring] No face detector available — face detection disabled");
+        // Don't alert as a strike — it's a system issue, not candidate's fault
+        // But log it for the interviewer
+        sendProctoringEvent(interviewId, "detection_unavailable", "info", "Face detection unavailable on this browser", token);
+      }
+
       if (faceCount === 0) {
         alert("face_missing", "flag", "No face detected — please face the camera");
       } else if (faceCount > 1) {
@@ -365,7 +385,15 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     };
 
     const interval = setInterval(detect, 4000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      // Clean up MediaPipe GPU resources
+      if (mediaPipeDetectorRef.current) {
+        try { mediaPipeDetectorRef.current.close(); } catch {}
+        mediaPipeDetectorRef.current = null;
+      }
+    };
   }, [enabled, videoRef, alert]);
 
   // Virtual camera detection

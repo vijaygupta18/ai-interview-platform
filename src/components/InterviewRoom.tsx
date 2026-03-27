@@ -181,7 +181,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             const violationRes = await fetch(`/api/interview/${interviewId}/violations${tokenParam}`);
             if (violationRes.ok) {
               const { count } = await violationRes.json();
-              setProctoringWarnings(count);
+              // Apply time-based decay: subtract 0.5 for every 5 minutes since interview started
+              const startTime = new Date(interview.startedAt).getTime();
+              const elapsedMinutes = (Date.now() - startTime) / 60000;
+              const decayAmount = Math.floor(elapsedMinutes / 5) * 0.5;
+              const adjustedCount = Math.max(0, count - decayAmount);
+              setProctoringWarnings(adjustedCount);
               const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "8");
               if (count >= maxStrikes) setShowProctoringBan(true);
             }
@@ -831,8 +836,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         window_blur: 1,
         phone_detected: 1.5,
         multiple_faces: 1.5,
+        second_monitor: 1.5,
+        devtools_open: 1.5,
         screen_share_stopped: 2,
         virtual_camera: 2,
+        heartbeat_missing: 2,
       };
       const effectiveSeverity = event.severity || "flag";
       const weight = strikeWeights[event.type] || 0;
@@ -969,9 +977,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             onClick={async () => {
               try {
                 await document.documentElement.requestFullscreen();
-              } catch {}
-              setNeedsFullscreenClick(false);
-              setFullscreenCountdown(0);
+                setNeedsFullscreenClick(false);
+                setFullscreenCountdown(0);
+              } catch {
+                // If fullscreen fails, still dismiss (browser may block repeated requests)
+                console.warn("[Fullscreen] Request failed");
+                setNeedsFullscreenClick(false);
+                setFullscreenCountdown(0);
+              }
             }}
             className="mt-6 rounded-lg bg-indigo-600 px-8 py-3 text-sm font-medium text-white transition hover:bg-indigo-500"
           >
