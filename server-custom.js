@@ -236,6 +236,7 @@ async function main() {
       },
     });
 
+    await nextApp.prepare();
     const handler = nextApp.getRequestHandler();
 
     server = createServer(async (req, res) => {
