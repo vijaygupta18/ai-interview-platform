@@ -37,7 +37,7 @@ function getSTTConfig() {
     return { provider: "sarvam", wsUrl: `wss://api.sarvam.ai/speech-to-text-streaming/transcribe/ws?api_subscription_key=${k}&language_code=${language}&model=saaras:v3`, headers: { "Api-Subscription-Key": k } };
   }
   const k = process.env.DEEPGRAM_API_KEY || "";
-  return { provider: "deepgram", wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=800&vad_events=true&diarize=true&utterance_end_ms=3000`, protocols: ["token", k] };
+  return { provider: "deepgram", wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-2&language=${language}&punctuate=true&interim_results=true&endpointing=800&vad_events=true&diarize=true`, protocols: ["token", k] };
 }
 
 function addWSProxy(server) {
@@ -73,16 +73,29 @@ function addWSProxy(server) {
     const buf = []; let ready = false;
     upstream.on("open", () => {
       ready = true; console.log(`[STT-WS] Connected to ${cfg.provider}`);
-      if (buf.length) { console.log(`[STT-WS] Flushing ${buf.length} chunks`); buf.forEach(c => upstream.send(c)); buf.length = 0; }
+      if (buf.length) { buf.forEach(c => upstream.send(c)); buf.length = 0; }
     });
 
-    clientWs.on("message", d => { if (ready && upstream.readyState === WebSocket.OPEN) upstream.send(d); else if (buf.length < 50) buf.push(d); });
-    upstream.on("message", (d, bin) => { if (clientWs.readyState === WebSocket.OPEN) clientWs.send(bin ? d : d.toString()); });
+    clientWs.on("message", (d, isBinary) => {
+      // CRITICAL: preserve text/binary framing — text (KeepAlive) as text, audio as binary
+      if (ready && upstream.readyState === WebSocket.OPEN) {
+        upstream.send(isBinary ? d : d.toString());
+      } else if (isBinary && buf.length < 20) {
+        buf.push(d);
+      }
+    });
+    upstream.on("message", (d, bin) => {
+      if (clientWs.readyState === WebSocket.OPEN) clientWs.send(bin ? d : d.toString());
+    });
 
     const ping = setInterval(() => {
       if (clientWs.readyState === WebSocket.OPEN) clientWs.ping();
-      if (upstream?.readyState === WebSocket.OPEN) upstream.ping();
-    }, 10000);
+      if (upstream?.readyState === WebSocket.OPEN) {
+        upstream.ping();
+        // Server-side KeepAlive as backup — ensures Deepgram never times out
+        if (cfg.provider === "deepgram") upstream.send(JSON.stringify({ type: "KeepAlive" }));
+      }
+    }, 5000);
 
     clientWs.on("close", (code, reason) => { console.log(`[STT-WS] Client closed code=${code} reason=${reason}`); clearInterval(ping); if (upstream.readyState <= 1) upstream.terminate(); });
     upstream.on("close", (code, reason) => { console.log(`[STT-WS] Upstream closed code=${code} reason=${reason}`); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(); });

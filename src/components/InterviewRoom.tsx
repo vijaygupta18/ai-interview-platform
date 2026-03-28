@@ -642,12 +642,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   // ─── STT Hook ──────────────────────────────────────────────────────────────
   const stt = useSTT({
-    providers: (process.env.NEXT_PUBLIC_STT_PROVIDERS || "browser,deepgram").split(",").map(s => s.trim()) as ("deepgram" | "browser")[],
+    providers: (process.env.NEXT_PUBLIC_STT_PROVIDERS || "deepgram,browser").split(",").map(s => s.trim()) as ("deepgram" | "browser")[],
     interviewId,
     token: tokenRef.current,
     isAISpeaking: isAISpeakingRef,
     isStarted,
     isEnding: isEndingRef,
+    mediaStream: mediaStreamRef,
     onInterim: (text) => {
       setInterimTranscript(text);
       if (text.trim()) lastActivityRef.current = Date.now();
