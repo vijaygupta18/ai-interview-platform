@@ -71,7 +71,9 @@ export async function POST(req: Request) {
     }
 
     // Get AI response
-    const aiText = await getAIResponse(interview, transcript ?? interview.transcript);
+    const aiRaw = await getAIResponse(interview, transcript ?? interview.transcript);
+    const hasEndSignal = aiRaw.includes("[END_INTERVIEW]");
+    const aiText = aiRaw.replace(/\[END_INTERVIEW\]/g, "").trim();
 
     const cleanedText = stripThinking(aiText);
     // Clean for TTS — remove special chars that TTS speaks literally
@@ -100,10 +102,15 @@ export async function POST(req: Request) {
 
       const audioBase64 = audioBuffer.toString("base64");
 
+      if (hasEndSignal) {
+        await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
+      }
+
       return NextResponse.json({
         audio: audioBase64,
         text: aiText,
         contentType: ttsProvider.contentType,
+        endInterview: hasEndSignal,
       });
     } catch (err) {
       console.warn("TTS failed:", (err as Error).message);

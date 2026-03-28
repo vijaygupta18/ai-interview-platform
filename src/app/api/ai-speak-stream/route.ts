@@ -131,13 +131,13 @@ export async function POST(req: Request) {
 
           const processSentence = (sentence: string) => {
             const idx = sentenceIdx++;
-            const cleaned = stripThinking(sentence).trim();
+            const cleaned = stripThinking(sentence).replace(/\[END_INTERVIEW\]/g, "").trim();
             if (!cleaned) return;
 
             // Send original text for transcript
             safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text: cleaned, idx })}\n\n`));
 
-            // Clean for TTS — remove special chars that TTS speaks literally
+            // Clean for TTS — remove special chars and end signal
             const ttsText = cleanForTTS(cleaned);
             if (!ttsText) return;
 
@@ -189,15 +189,25 @@ export async function POST(req: Request) {
           // Wait for all parallel TTS to complete
           await Promise.all(ttsPromises);
 
-          // Save AI response to transcript
-          const cleanedFull = stripThinking(fullText).trim();
+          // Check for [END_INTERVIEW] signal — AI decided to close
+          const hasEndSignal = fullText.includes("[END_INTERVIEW]");
+          const cleanedFull = stripThinking(fullText).replace(/\[END_INTERVIEW\]/g, "").trim();
+
           if (cleanedFull) {
             await addTranscriptEntry(interviewId, {
               role: "ai", text: cleanedFull, timestamp: new Date().toISOString(),
             });
           }
 
-          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", fullText: cleanedFull })}\n\n`));
+          // If AI signaled end, mark interview as completed + trigger scorecard
+          if (hasEndSignal) {
+            console.log(`[Stream] AI ended interview ${interviewId}`);
+            import("@/lib/store").then(({ updateInterview }) => {
+              updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
+            }).catch(() => {});
+          }
+
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", fullText: cleanedFull, endInterview: hasEndSignal })}\n\n`));
           safeClose();
         } catch (err) {
           console.error("[Stream] Error:", err);

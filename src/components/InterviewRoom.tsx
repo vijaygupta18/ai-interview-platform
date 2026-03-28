@@ -597,7 +597,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 else { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: fullText }; return u; }); }
               }
               if (data.type === "audio") { audioMap.set(data.idx, { audio: data.audio, contentType: data.contentType }); playNext(); }
-              if (data.type === "done" && data.fullText) { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: data.fullText }; return u; }); }
+              if (data.type === "done") {
+                if (data.fullText) { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: data.fullText }; return u; }); }
+                // AI decided to end the interview — redirect after TTS finishes
+                if (data.endInterview) {
+                  streamDone = true;
+                  let waitCount = 0;
+                  const waitForAudio = async () => {
+                    while ((audioMap.size > 0 || isPlaying) && waitCount < 200) { await new Promise((r) => setTimeout(r, 100)); waitCount++; }
+                    // Wait 5s after speech ends so candidate can read/absorb
+                    await new Promise((r) => setTimeout(r, 5000));
+                    stt.stop();
+                    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+                    window.location.href = `/completed/${interviewId}`;
+                  };
+                  waitForAudio();
+                }
+              }
             } catch {}
           }
         }

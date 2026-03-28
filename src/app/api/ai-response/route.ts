@@ -66,7 +66,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const aiResponse = await getAIResponse(interview, transcript ?? interview.transcript);
+    const aiRaw = await getAIResponse(interview, transcript ?? interview.transcript);
+    const hasEndSignal = aiRaw.includes("[END_INTERVIEW]");
+    const aiResponse = aiRaw.replace(/\[END_INTERVIEW\]/g, "").trim();
 
     await addTranscriptEntry(interviewId, {
       role: "ai",
@@ -74,7 +76,11 @@ export async function POST(req: Request) {
       timestamp: new Date().toISOString(),
     });
 
-    return NextResponse.json({ text: aiResponse });
+    if (hasEndSignal) {
+      await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
+    }
+
+    return NextResponse.json({ text: aiResponse, endInterview: hasEndSignal });
   } catch (error) {
     console.error("AI response error:", error);
     return NextResponse.json({ error: "Failed to get AI response" }, { status: 500 });
