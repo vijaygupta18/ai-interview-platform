@@ -54,18 +54,21 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
   }, []);
 
-  const handleFinalText = useCallback((text: string) => {
-    if (!text.trim() || stoppedRef.current) return; // #2: guard against post-stop delivery
+  const handleFinalText = useCallback((text: string, speechFinal = false) => {
+    if (!text.trim() || stoppedRef.current) return;
     finalBufferRef.current += (finalBufferRef.current ? " " : "") + text;
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    // speechFinal = Deepgram is confident speaker stopped → shorter wait (1s)
+    // otherwise keep 1.5s to let candidate pause and continue
+    const delay = speechFinal ? 1000 : 1500;
     silenceTimerRef.current = setTimeout(() => {
-      if (stoppedRef.current || isEnding.current) return; // #2: don't fire after stop
+      if (stoppedRef.current || isEnding.current) return;
       const full = finalBufferRef.current.trim();
       if (!full) return;
       finalBufferRef.current = "";
       onCompleteRef.current(full);
-    }, 1500);
+    }, delay);
   }, [isEnding]);
 
   const handleInterimText = useCallback((text: string) => {
@@ -157,10 +160,10 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
 
         const text = alt.transcript || "";
         const isFinal = data.is_final;
+        const speechFinal = data.speech_final;
 
-        // #7: simplified — handleFinalText already manages the silence timer
         if (isFinal && text) {
-          handleFinalText(text);
+          handleFinalText(text, speechFinal);
           handleInterimText("");
         } else if (!isFinal && text) {
           handleInterimText(text);

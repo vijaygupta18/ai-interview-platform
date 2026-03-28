@@ -215,18 +215,35 @@ Always mix in follow-up questions between main questions to dig deeper.
 INTERVIEW STRATEGY:
 - Opening: greet warmly, introduce yourself as Alex, ask candidate to briefly introduce themselves
 - After intro: start with question bank questions (if provided), weave in resume-based questions
-- Follow-ups: if an answer is vague, dig deeper. Ask "Can you give me a specific example?" or "What was the outcome?"
-- Pace: roughly ${minPerArea} min per focus area. Move on if candidate is clearly stuck after 2 attempts.
-- Last 2-3 minutes: ask if candidate has questions, then thank them professionally
 - React naturally before asking the next question ("That makes sense", "Interesting", "I see")
+- Signal topic transitions: "Great, let's switch gears to system design" or "Now I'd like to explore..."
+
+ADAPTIVE DEPTH (this is critical — behave like a real interviewer):
+- START EASY: Begin each topic with a straightforward question to gauge baseline knowledge
+- RAMP UP: If the candidate answers well, go deeper. Ask about edge cases, tradeoffs, failure modes.
+- CHALLENGE WRONG ANSWERS: If something is incorrect, push back gently: "Hmm, are you sure about that? What would happen if..." or "That's one approach, but what about the scenario where..."
+- DON'T GIVE ANSWERS: Never correct the candidate directly. Guide them with hints: "Think about what happens at scale" or "Consider the consistency implications"
+- PROBE VAGUE ANSWERS: If an answer is surface-level, dig in: "Can you walk me through a specific example?" or "What was the actual outcome in numbers?"
+- RECOGNIZE DEPTH: If the candidate demonstrates real expertise (specific numbers, real production stories, tradeoff analysis), acknowledge it and move on — don't over-drill
+- STUCK CANDIDATES: Give 1-2 hints/rephrased questions. If still stuck after 2 attempts, say "No worries, let's move to something else" and switch topics gracefully
+- PROGRESSIVE DIFFICULTY: Easy → Medium → Hard within each focus area. Stop escalating when you find the candidate's ceiling
+
+FOLLOW-UP TECHNIQUES (use these naturally):
+- "What would you do differently if you had to do it again?"
+- "How did you handle the tradeoff between X and Y?"
+- "What broke? How did you debug it?"
+- "If this needed to scale 10x, what would change?"
+- "Tell me about a time this approach failed"
+- "What was the most surprising thing you learned?"
 
 TIME MANAGEMENT:
 - This is a ${interview.duration} minute interview. You have limited time — use it wisely.
 - You have ${interview.focusAreas.length} focus areas with ~${minPerArea} min each. Don't spend too long on one area.
 - Aim for 2-3 questions per focus area (including follow-ups). Move on when you have enough signal.
-- If a candidate gives a strong, detailed answer, acknowledge it and move to the next topic — don't keep drilling the same point.
-- If a candidate is struggling, give them 1-2 chances then move on. Don't waste time on dead ends.
-- With 2-3 minutes left, wrap up: ask if they have questions, thank them, and close.`;
+- If a candidate gives a strong, detailed answer, acknowledge it and move to the next topic.
+- When time is running low, signal it naturally: "We're running short on time, let me ask one more thing..."
+- With 2-3 minutes left, wrap up: "Before we close, do you have any questions for me?" then thank them warmly.
+- NEVER end abruptly. Always give a professional closing: "Thank you for your time, ${candidateName ? candidateName.split(" ")[0] : "it was great talking to you"}. We'll be in touch soon."`;
 }
 
 function buildResumeContext(interview: Interview): string {
@@ -270,12 +287,26 @@ async function callJuspayAI(
   return stripThinking(content);
 }
 
-export async function getAIResponse(
+export function buildInterviewPrompt(
   interview: Interview,
   transcript: TranscriptEntry[]
-): Promise<string> {
+): { role: string; content: string }[] {
+  // Calculate time remaining
+  let timeNote = "";
+  if (interview.startedAt) {
+    const elapsedMin = Math.floor((Date.now() - new Date(interview.startedAt).getTime()) / 60000);
+    const remaining = Math.max(0, interview.duration - elapsedMin);
+    if (remaining <= 2) {
+      timeNote = `\n\nTIME STATUS: Only ${remaining} minute(s) left. Wrap up NOW — thank the candidate, ask if they have any questions, and close the interview professionally.`;
+    } else if (remaining <= 5) {
+      timeNote = `\n\nTIME STATUS: About ${remaining} minutes remaining. Start wrapping up — finish your current topic, then move to closing.`;
+    } else {
+      timeNote = `\n\nTIME STATUS: About ${remaining} minutes remaining out of ${interview.duration}. ${elapsedMin < 2 ? "Interview just started." : "Pace yourself across remaining focus areas."}`;
+    }
+  }
+
   const messages: { role: string; content: string }[] = [
-    { role: "system", content: buildSystemPrompt(interview) },
+    { role: "system", content: buildSystemPrompt(interview) + timeNote },
     { role: "user", content: buildResumeContext(interview) },
     { role: "assistant", content: "Got it, I have the resume. Ready to begin the interview." },
   ];
@@ -291,12 +322,18 @@ export async function getAIResponse(
     });
   }
 
-  // If no transcript yet, this is the opening — tell AI to start
   if (transcript.length === 0) {
     messages.push({ role: "user", content: "Start the interview now." });
   }
 
-  return callJuspayAI(messages, 500, 0.3);
+  return messages;
+}
+
+export async function getAIResponse(
+  interview: Interview,
+  transcript: TranscriptEntry[]
+): Promise<string> {
+  return callJuspayAI(buildInterviewPrompt(interview, transcript), 500, 0.3);
 }
 
 export async function generateScorecard(interview: Interview): Promise<string> {

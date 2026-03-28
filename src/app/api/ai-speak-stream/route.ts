@@ -1,5 +1,5 @@
 import { getInterview, addTranscriptEntry, getProctoringViolationCount, addProctoringEvent } from "@/lib/store";
-import { stripThinking } from "@/lib/ai";
+import { stripThinking, buildInterviewPrompt } from "@/lib/ai";
 import { validateAccessPost } from "@/lib/auth-check";
 import { rateLimit } from "@/lib/rate-limit";
 import { pool } from "@/lib/db";
@@ -80,34 +80,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // Build AI messages
-    // Build messages for streaming AI call
-    const sysPrompt = interview.role ? `You are Alex, a senior interviewer conducting a ${interview.duration} minute interview for a ${interview.level} ${interview.role} position. Reply with ONLY what you would say. 2-3 sentences max. No markdown.` : "";
-
-    // Use the existing non-streaming path but with stream=true
-    const aiMessages: { role: string; content: string }[] = [
-      { role: "system", content: sysPrompt || "You are Alex, a senior interviewer. Reply with ONLY what you would say. 2-3 sentences max." },
-    ];
-
-    if (interview.resume) {
-      aiMessages.push({ role: "user", content: `Resume: ${interview.resume.substring(0, 5000)}` });
-      aiMessages.push({ role: "assistant", content: "Got it." });
-    }
-
-    const trimmedTranscript = (transcript || interview.transcript).length > 80
-      ? [...(transcript || interview.transcript).slice(0, 5), ...(transcript || interview.transcript).slice(-75)]
-      : (transcript || interview.transcript);
-
-    for (const entry of trimmedTranscript) {
-      aiMessages.push({
-        role: entry.role === "ai" ? "assistant" : "user",
-        content: entry.text,
-      });
-    }
-
-    if (trimmedTranscript.length === 0) {
-      aiMessages.push({ role: "user", content: "Start the interview now." });
-    }
+    // Build AI messages using full interview prompt
+    const aiMessages = buildInterviewPrompt(interview, transcript || interview.transcript);
 
     // Stream AI response + TTS pipeline
     const encoder = new TextEncoder();
