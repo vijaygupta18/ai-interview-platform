@@ -631,7 +631,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       const silenceSec = (Date.now() - lastActivityRef.current) / 1000;
       // Only nudge if: 45s silence AND no interim speech AND AI not speaking AND not processing
       if (!micEnabled) return; // Don't nudge when deliberately muted
-      if (silenceSec > 45 && !interimTranscript && !isProcessingRef.current && !isAISpeaking) {
+      if (silenceSec > 45 && !interimTranscript && !isProcessingRef.current && !isAISpeakingRef.current) {
         console.log("[Watchdog] 45s silence, nudging AI...");
         getAIResponse([...transcript, { role: "candidate", text: "(candidate is waiting)", timestamp: Date.now() }], { skipSave: true });
         lastActivityRef.current = Date.now();
@@ -659,6 +659,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       const entry: TranscriptEntry = { role: "candidate", text: candidateText, timestamp: Date.now() };
       setTranscript((prev) => {
         const updated = [...prev, entry];
+        // Side effect in updater is intentional — ensures getAIResponse gets the latest transcript
+        // The isProcessingRef guard prevents double-fire in strict mode
         getAIResponse(updated);
         return updated;
       });
@@ -811,7 +813,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   useEffect(() => {
     if (!showProctoringBan || isEndingRef.current) return;
     const timer = setTimeout(() => {
-      // End interview
+      // #24: set isEndingRef so STT doesn't reconnect during shutdown
+      isEndingRef.current = true;
+      setIsEnding(true);
       stt.stop();
       if (timerRef.current) clearInterval(timerRef.current);
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());

@@ -73,15 +73,16 @@ function addWSProxy(server) {
     const buf = []; let ready = false;
     upstream.on("open", () => {
       ready = true; console.log(`[STT-WS] Connected to ${cfg.provider}`);
-      if (buf.length) { buf.forEach(c => upstream.send(c)); buf.length = 0; }
+      if (buf.length) { buf.forEach(c => upstream.send(c.isBinary ? c.data : c.data.toString())); buf.length = 0; }
     });
 
+    // #10: buffer text frames too (CloseStream could arrive before upstream ready)
     clientWs.on("message", (d, isBinary) => {
-      // CRITICAL: preserve text/binary framing — text (KeepAlive) as text, audio as binary
       if (ready && upstream.readyState === WebSocket.OPEN) {
+        // CRITICAL: preserve text/binary framing — text (KeepAlive) as text, audio as binary
         upstream.send(isBinary ? d : d.toString());
-      } else if (isBinary && buf.length < 20) {
-        buf.push(d);
+      } else if (buf.length < 20) {
+        buf.push({ data: d, isBinary });
       }
     });
     upstream.on("message", (d, bin) => {
@@ -92,15 +93,16 @@ function addWSProxy(server) {
       if (clientWs.readyState === WebSocket.OPEN) clientWs.ping();
       if (upstream?.readyState === WebSocket.OPEN) {
         upstream.ping();
-        // Server-side KeepAlive as backup — ensures Deepgram never times out
         if (cfg.provider === "deepgram") upstream.send(JSON.stringify({ type: "KeepAlive" }));
       }
     }, 5000);
 
-    clientWs.on("close", (code, reason) => { console.log(`[STT-WS] Client closed code=${code} reason=${reason}`); clearInterval(ping); if (upstream.readyState <= 1) upstream.terminate(); });
-    upstream.on("close", (code, reason) => { console.log(`[STT-WS] Upstream closed code=${code} reason=${reason}`); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(); });
+    const cleanup = () => { clearInterval(ping); };
+    clientWs.on("close", () => { cleanup(); if (upstream.readyState <= 1) upstream.terminate(); });
+    // #11: clear ping on upstream error too
+    upstream.on("close", () => { cleanup(); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(); });
     clientWs.on("error", e => console.error("[STT-WS]", e.message));
-    upstream.on("error", e => { console.error("[STT-WS]", e.message); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011); });
+    upstream.on("error", e => { cleanup(); console.error("[STT-WS]", e.message); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011); });
   });
 
   const shutdown = () => { wss.clients.forEach(ws => ws.close(1001)); wss.close(); pool.end(); server.close(() => process.exit(0)); setTimeout(() => process.exit(1), 5000); };
