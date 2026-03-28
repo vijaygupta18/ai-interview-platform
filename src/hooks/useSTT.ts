@@ -8,7 +8,7 @@ interface UseSTTOptions {
   providers: STTProviderName[];        // fallback order
   interviewId: string;
   token: string;
-  isAISpeaking: React.MutableRefObject<boolean>;  // gate: skip during AI speech
+  isAISpeaking: React.MutableRefObject<boolean>;  // gate: disconnect during AI speech
   isStarted: boolean;
   isEnding: React.MutableRefObject<boolean>;
   onInterim: (text: string) => void;   // candidate is speaking (live text)
@@ -36,7 +36,8 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
   const browserRecRef = useRef<any>(null);
   const reconnectCountRef = useRef(0);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const stoppedRef = useRef(false); // prevents ghost restarts after stop()
+  const stoppedRef = useRef(false); // globally stopped (interview ended)
+  const turnActiveRef = useRef(false); // true = candidate's turn, STT should be on
   const finalBufferRef = useRef("");
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
@@ -52,8 +53,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     if (!text.trim()) return;
     finalBufferRef.current += (finalBufferRef.current ? " " : "") + text;
 
-    // Reset silence timer — wait 2s of idle then send to AI
-    // (gives candidate time to pause and continue without being cut off)
+    // Reset silence timer — wait 1.5s of idle then send to AI
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(() => {
       const full = finalBufferRef.current.trim();
@@ -67,10 +67,33 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     onInterimRef.current(text);
   }, []);
 
+  // ─── Cleanup helpers ──────────────────────────────────────────────────
+
+  const closeDeepgram = useCallback(() => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    mediaRecorderRef.current = null;
+    if (dgSocketRef.current) {
+      try { dgSocketRef.current.close(); } catch {}
+      dgSocketRef.current = null;
+    }
+    setConnected(false);
+  }, []);
+
+  const closeBrowser = useCallback(() => {
+    if (browserRecRef.current) {
+      if (browserRecRef.current._echoGuard) clearInterval(browserRecRef.current._echoGuard);
+      try { browserRecRef.current.abort(); } catch {}
+      browserRecRef.current = null;
+    }
+    setConnected(false);
+  }, []);
+
   // ─── Deepgram Provider ──────────────────────────────────────────────────
 
   const startDeepgram = useCallback(async () => {
-    // Get media stream
+    // Get media stream (reuse across reconnects)
     if (!mediaStreamRef.current) {
       try {
         mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -79,9 +102,8 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       }
     }
 
-    // Cleanup previous
-    if (dgSocketRef.current) { try { dgSocketRef.current.close(); } catch {} }
-    if (mediaRecorderRef.current?.state === "recording") { try { mediaRecorderRef.current.stop(); } catch {} }
+    // Cleanup previous connection
+    closeDeepgram();
 
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${wsProtocol}//${window.location.host}/api/stt-ws?token=${token}`;
@@ -115,18 +137,9 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
           if (dgSocket.readyState === WebSocket.OPEN && e.data.size > 0) dgSocket.send(e.data);
         };
         recorder.start(250);
-
-        // Keep-alive ping every 10s
-        const keepAlive = setInterval(() => {
-          if (dgSocket.readyState === WebSocket.OPEN) dgSocket.send(new Uint8Array(0));
-          else clearInterval(keepAlive);
-        }, 10000);
       };
 
       dgSocket.onmessage = async (msg) => {
-        // Turn-based: skip during AI speech
-        if (isAISpeaking.current) return;
-
         let raw: string;
         if (msg.data instanceof Blob) raw = await msg.data.text();
         else raw = msg.data;
@@ -152,30 +165,30 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
               if (!full) return;
               finalBufferRef.current = "";
               onCompleteRef.current(full);
-            }, 1500); // Same 2s wait — consistent, gives candidate time to continue
+            }, 1500);
           }
         } else if (!isFinal && text) {
           handleInterimText(text);
           if (text.trim()) {
-            // Reset silence timer on interim too
             if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           }
         }
       };
 
-      dgSocket.onerror = () => console.error("[STT:deepgram] Error");
+      dgSocket.onerror = (e) => console.error("[STT:deepgram] Error:", e);
 
-      dgSocket.onclose = () => {
-        console.log("[STT:deepgram] Disconnected");
+      dgSocket.onclose = (e) => {
+        console.log(`[STT:deepgram] Disconnected code=${e.code} reason=${e.reason}`);
         setConnected(false);
-        // Auto-reconnect with backoff
-        if (isStarted && !isEnding.current && reconnectCountRef.current < 5) {
+        // Only auto-reconnect if it's candidate's turn and not globally stopped
+        if (turnActiveRef.current && !stoppedRef.current && !isEnding.current && reconnectCountRef.current < 5) {
           reconnectCountRef.current++;
           const delay = 2000 * reconnectCountRef.current;
           console.log(`[STT:deepgram] Reconnecting in ${delay}ms (${reconnectCountRef.current}/5)`);
-          setTimeout(() => startDeepgram(), delay);
+          setTimeout(() => {
+            if (turnActiveRef.current && !stoppedRef.current) startDeepgram();
+          }, delay);
         } else if (reconnectCountRef.current >= 5) {
-          // Max retries — try next provider
           console.warn("[STT:deepgram] Max retries, trying next provider");
           tryNextProvider();
         }
@@ -185,7 +198,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     } catch {
       return false;
     }
-  }, [token, isAISpeaking, isStarted, isEnding, handleFinalText, handleInterimText]);
+  }, [token, isEnding, handleFinalText, handleInterimText, closeDeepgram]);
 
   // ─── Browser Speech API Provider ────────────────────────────────────────
 
@@ -200,7 +213,12 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       recognition.lang = "en-IN";
       recognition.maxAlternatives = 1;
 
+      let isRunning = false;
+      let lastInterimText = "";
+      let startFailCount = 0;
+
       recognition.onstart = () => {
+        isRunning = true;
         console.log("[STT:browser] Started");
         setConnected(true);
         setEverConnected(true);
@@ -208,96 +226,64 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       };
 
       recognition.onresult = (event: any) => {
-        // Turn-based: skip during AI speech
-        if (isAISpeaking.current) return;
-
         const result = event.results[event.results.length - 1];
         const text = result[0].transcript;
         const isFinal = result.isFinal;
 
         if (!isFinal) {
+          lastInterimText = text;
           handleInterimText(text);
           return;
         }
 
+        lastInterimText = "";
         handleInterimText("");
         handleFinalText(text);
       };
 
       recognition.onerror = (event: any) => {
+        if (event.error === "aborted") return;
         console.warn("[STT:browser] Error:", event.error);
         if (event.error === "not-allowed" || event.error === "service-not-available") {
-          console.log("[STT:browser] Failed, trying next provider");
           tryNextProvider();
         }
       };
 
       recognition.onend = () => {
-        console.log("[STT:browser] Ended");
+        isRunning = false;
         setConnected(false);
-        // If stopped by echoGuard, don't restart — echoGuard handles it
-        if (isStopped) return;
-        // Natural end (browser timeout) — restart if interview active
-        if (isStarted && !isEnding.current && !isAISpeaking.current) {
+        if (stoppedRef.current || !turnActiveRef.current) return;
+
+        // Flush pending interim on browser timeout (~60s)
+        if (lastInterimText.trim()) {
+          console.log("[STT:browser] Flushing interim on timeout");
+          handleFinalText(lastInterimText);
+          handleInterimText("");
+          lastInterimText = "";
+        }
+
+        // Auto-restart if still candidate's turn AND AI is not speaking
+        if (turnActiveRef.current && !stoppedRef.current && !isEnding.current && !isAISpeaking.current) {
           setTimeout(() => {
-            if (isAISpeaking.current || isStopped || stoppedRef.current) return;
+            if (!turnActiveRef.current || stoppedRef.current || isRunning || isAISpeaking.current) return;
             try {
               recognition.start();
-              setConnected(true);
               console.log("[STT:browser] Auto-restarted");
             } catch {
-              console.warn("[STT:browser] Restart failed, trying next provider");
-              tryNextProvider();
+              startFailCount++;
+              if (startFailCount >= 3) tryNextProvider();
             }
-          }, 500);
+          }, 300);
         }
       };
 
       recognition.start();
       browserRecRef.current = recognition;
-
-      // Manage start/stop when AI speaks/stops (prevents echo)
-      let wasAISpeaking = false;
-      let isStopped = false;
-      let startFailCount = 0;
-      const echoGuard = setInterval(() => {
-        if (isAISpeaking.current && !isStopped) {
-          isStopped = true;
-          wasAISpeaking = true;
-          try { recognition.abort(); } catch {}
-          console.log("[STT:browser] Paused (AI speaking)");
-        } else if (!isAISpeaking.current && wasAISpeaking && isStopped) {
-          wasAISpeaking = false;
-          setTimeout(() => {
-            if (isAISpeaking.current || stoppedRef.current) return;
-            try {
-              recognition.start();
-              isStopped = false;
-              startFailCount = 0;
-              setConnected(true);
-              console.log("[STT:browser] Resumed");
-            } catch {
-              startFailCount++;
-              console.warn(`[STT:browser] Resume failed (${startFailCount}/3)`);
-              if (startFailCount >= 3) {
-                console.error("[STT:browser] 3 failed resumes — falling back to Deepgram");
-                clearInterval(echoGuard);
-                tryNextProvider();
-              }
-            }
-          }, 500);
-        }
-      }, 300);
-
-      // Store cleanup ref
-      const origStop = recognition.stop.bind(recognition);
-      recognition._echoGuard = echoGuard;
-
       return true;
     } catch {
       return false;
     }
-  }, [isAISpeaking, isStarted, isEnding, handleFinalText, handleInterimText]);
+  }, [isEnding, handleFinalText, handleInterimText]);
 
   // ─── Provider Manager ───────────────────────────────────────────────────
 
@@ -315,12 +301,13 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     else if (next === "browser") startBrowser();
   }, [providers, startDeepgram, startBrowser]);
 
-  const start = useCallback(() => {
-    stoppedRef.current = false;
+  // ─── Turn Management (connect on candidate turn, disconnect on AI turn) ─
+
+  const connectProvider = useCallback(() => {
     providerIdxRef.current = 0;
     reconnectCountRef.current = 0;
     const first = providers[0];
-    console.log(`[STT] Starting with provider: ${first}`);
+    console.log(`[STT] Connecting provider: ${first}`);
     if (first === "deepgram") startDeepgram();
     else if (first === "browser") {
       const ok = startBrowser();
@@ -328,33 +315,78 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     }
   }, [providers, startDeepgram, startBrowser, tryNextProvider]);
 
+  const startTurn = useCallback(() => {
+    console.log(`[STT] startTurn called — aiSpeaking=${isAISpeaking.current}`);
+    stoppedRef.current = false; // reset — we're explicitly being told to start
+    turnActiveRef.current = true;
+    // If AI is still speaking, don't connect yet — turn watcher will connect when AI stops
+    if (isAISpeaking.current) {
+      console.log("[STT] Marked ready — will connect when AI stops speaking");
+      return;
+    }
+    connectProvider();
+  }, [isAISpeaking, connectProvider]);
+
+  // Temporarily disconnect STT during AI speech — turnActive stays true
+  const pauseSTT = useCallback(() => {
+    closeDeepgram();
+    closeBrowser();
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+  }, [closeDeepgram, closeBrowser]);
+
   const stop = useCallback(() => {
     stoppedRef.current = true;
-    if (dgSocketRef.current) { try { dgSocketRef.current.close(); } catch {} dgSocketRef.current = null; }
-    if (mediaRecorderRef.current?.state === "recording") { try { mediaRecorderRef.current.stop(); } catch {} }
-    if (browserRecRef.current) {
-      if (browserRecRef.current._echoGuard) clearInterval(browserRecRef.current._echoGuard);
-      try { browserRecRef.current.stop(); } catch {}
-      browserRecRef.current = null;
-    }
+    turnActiveRef.current = false;
+    closeDeepgram();
+    closeBrowser();
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    setConnected(false);
     setActiveProvider(null);
-  }, []);
+  }, [closeDeepgram, closeBrowser]);
+
+  // ─── Auto turn management: watch isAISpeaking ─────────────────────────
+  // When AI starts speaking → end candidate turn (disconnect STT)
+  // When AI stops speaking → start candidate turn (connect STT)
+
+  const wasAISpeakingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isStarted || stoppedRef.current) return;
+    const turnWatcher = setInterval(() => {
+      const aiSpeaking = isAISpeaking.current;
+      if (aiSpeaking && !wasAISpeakingRef.current) {
+        // AI started speaking — disconnect STT (but keep turn active)
+        wasAISpeakingRef.current = true;
+        console.log("[STT] AI speaking — pausing STT");
+        pauseSTT();
+      } else if (!aiSpeaking && wasAISpeakingRef.current) {
+        // AI stopped speaking — reconnect STT if turn is active
+        wasAISpeakingRef.current = false;
+        if (turnActiveRef.current && !stoppedRef.current && !isEnding.current) {
+          console.log("[STT] AI done — connecting STT for candidate turn");
+          // Small delay to ensure audio is fully done
+          setTimeout(() => {
+            if (!isAISpeaking.current && !stoppedRef.current && turnActiveRef.current) connectProvider();
+          }, 500);
+        }
+      }
+    }, 300);
+    return () => clearInterval(turnWatcher);
+  }, [isStarted, isAISpeaking, isEnding, connectProvider, pauseSTT]);
 
   // ─── Health Monitor ─────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isStarted || isEnding.current) return;
     const monitor = setInterval(() => {
-      if (!connected && !isAISpeaking.current && isStarted && !isEnding.current && activeProvider) {
-        console.log("[STT] Health check — disconnected, reconnecting...");
-        if (activeProvider === "deepgram") startDeepgram();
-        else if (activeProvider === "browser") startBrowser();
+      if (!connected && turnActiveRef.current && !isAISpeaking.current && !stoppedRef.current) {
+        console.log("[STT] Health check — disconnected during candidate turn, reconnecting...");
+        const provider = providers[providerIdxRef.current] || providers[0];
+        if (provider === "deepgram") startDeepgram();
+        else if (provider === "browser") startBrowser();
       }
     }, 15000);
     return () => clearInterval(monitor);
-  }, [isStarted, connected, activeProvider, isAISpeaking, isEnding, startDeepgram, startBrowser]);
+  }, [isStarted, connected, isAISpeaking, isEnding, providers, startDeepgram, startBrowser]);
 
   // ─── Cleanup on unmount ─────────────────────────────────────────────────
 
@@ -362,5 +394,5 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     return () => stop();
   }, [stop]);
 
-  return { connected, everConnected, provider: activeProvider, start, stop };
+  return { connected, everConnected, provider: activeProvider, start: startTurn, stop };
 }

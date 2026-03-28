@@ -642,7 +642,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
   // ─── STT Hook ──────────────────────────────────────────────────────────────
   const stt = useSTT({
-    providers: ["browser", "deepgram"],
+    providers: (process.env.NEXT_PUBLIC_STT_PROVIDERS || "browser,deepgram").split(",").map(s => s.trim()) as ("deepgram" | "browser")[],
     interviewId,
     token: tokenRef.current,
     isAISpeaking: isAISpeakingRef,
@@ -692,9 +692,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     console.log("[Interview] Getting AI opening message...");
     const openingTranscript: TranscriptEntry[] = [];
     await getAIResponse(openingTranscript);
+    // STT turn management is automatic — hook watches isAISpeaking
+    // and connects/disconnects Deepgram per turn. Just start the first turn.
     console.log("[Interview] AI finished speaking, starting STT...");
-
-    // Start STT after AI finishes speaking
     stt.start();
   }, [getAIResponse, stt, interviewData, interviewId]);
 

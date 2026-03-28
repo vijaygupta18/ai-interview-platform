@@ -115,6 +115,16 @@ export async function POST(req: Request) {
 
     const stream = new ReadableStream({
       async start(controller) {
+        let closed = false;
+        const safeEnqueue = (data: Uint8Array) => {
+          if (closed) return;
+          try { controller.enqueue(data); } catch { closed = true; }
+        };
+        const safeClose = () => {
+          if (closed) return;
+          closed = true;
+          try { controller.close(); } catch {}
+        };
         try {
           const aiRes = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
             method: "POST",
@@ -133,8 +143,8 @@ export async function POST(req: Request) {
           });
 
           if (!aiRes.ok || !aiRes.body) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "AI failed" })}\n\n`));
-            controller.close();
+            safeEnqueue(encoder.encode(`data: ${JSON.stringify({ error: "AI failed" })}\n\n`));
+            safeClose();
             return;
           }
 
@@ -151,7 +161,7 @@ export async function POST(req: Request) {
             if (!cleaned) return;
 
             // Send original text for transcript
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text: cleaned, idx })}\n\n`));
+            safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text: cleaned, idx })}\n\n`));
 
             // Clean for TTS — remove special chars that TTS speaks literally
             const ttsText = cleanForTTS(cleaned);
@@ -160,7 +170,7 @@ export async function POST(req: Request) {
             // Generate TTS in parallel (client plays in order using idx)
             const p = ttsProvider.synthesize(ttsText).then((audioBuffer) => {
               const audioBase64 = audioBuffer.toString("base64");
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify({
                 type: "audio",
                 audio: audioBase64,
                 contentType: ttsProvider.contentType,
@@ -213,12 +223,12 @@ export async function POST(req: Request) {
             });
           }
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", fullText: cleanedFull })}\n\n`));
-          controller.close();
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", fullText: cleanedFull })}\n\n`));
+          safeClose();
         } catch (err) {
           console.error("[Stream] Error:", err);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`));
-          controller.close();
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`));
+          safeClose();
         }
       },
     });
