@@ -202,8 +202,36 @@ export async function POST(req: Request) {
           // If AI signaled end, mark interview as completed + trigger scorecard
           if (hasEndSignal) {
             console.log(`[Stream] AI ended interview ${interviewId}`);
-            import("@/lib/store").then(({ updateInterview }) => {
-              updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
+            // Mark completed + auto-score in background
+            import("@/lib/store").then(async ({ updateInterview, getInterview }) => {
+              await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });
+              // Generate scorecard after 3s delay (let transcript save finish)
+              setTimeout(async () => {
+                try {
+                  const { startScoring, completeScoring, failScoring } = await import("@/lib/scoring-tracker");
+                  const { generateScorecard } = await import("@/lib/ai");
+                  const { normalizeScorecard } = await import("@/lib/normalize-scorecard");
+                  const freshInterview = await getInterview(interviewId);
+                  if (freshInterview && freshInterview.transcript.length > 0 && !freshInterview.scorecard) {
+                    if (await startScoring(interviewId)) {
+                      const raw = await generateScorecard(freshInterview);
+                      let parsed;
+                      try { parsed = JSON.parse(raw); } catch {
+                        const match = raw.match(/\{[\s\S]*\}/);
+                        if (match) parsed = JSON.parse(match[0]);
+                      }
+                      if (parsed) {
+                        const scorecard = normalizeScorecard(parsed);
+                        await updateInterview(interviewId, { scorecard });
+                        completeScoring(interviewId);
+                        console.log(`[Stream] Scorecard generated for ${interviewId}`);
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.error(`[Stream] Scorecard failed for ${interviewId}:`, err);
+                }
+              }, 3000);
             }).catch(() => {});
           }
 
