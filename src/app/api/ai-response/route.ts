@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     // Server-side proctoring enforcement
-    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20");
     const violations = await getProctoringViolationCount(interviewId);
     if (violations >= MAX_STRIKES) {
       await updateInterview(interviewId, { status: "completed", endedAt: new Date().toISOString() });

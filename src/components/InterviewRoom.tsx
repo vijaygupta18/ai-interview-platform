@@ -217,7 +217,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               const decayAmount = Math.floor(elapsedMinutes / 5) * 0.5;
               const adjustedCount = Math.max(0, count - decayAmount);
               setProctoringWarnings(adjustedCount);
-              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+              const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20");
               if (count >= maxStrikes) setShowProctoringBan(true);
             }
           } catch (err) {
@@ -814,7 +814,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (weight > 0 && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + weight;
-          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10");
+          const maxStrikes = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20");
           if (next >= maxStrikes) {
             setShowProctoringBan(true);
           }
@@ -1459,7 +1459,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               : "bg-yellow-900/90 border-yellow-500/30 backdrop-blur"
           }`}>
             <div className="flex gap-1">
-              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10"), 10) }, (_, i) => i + 1).map((i) => (
+              {Array.from({ length: Math.min(parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20"), 10) }, (_, i) => i + 1).map((i) => (
                 <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
                   i <= proctoringWarnings
                     ? "bg-red-500 border-red-400 scale-110"
@@ -1468,7 +1468,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               ))}
             </div>
             <span className={`text-sm font-medium ${proctoringWarnings >= 3 ? "text-red-200" : "text-yellow-200"}`}>
-              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "10") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
+              Warning {proctoringWarnings}/{parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20")} — {proctoringWarnings >= parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20") - 1 ? "Next violation will end the interview" : "Please stay focused and look at the screen"}
             </span>
           </div>
         </div>
