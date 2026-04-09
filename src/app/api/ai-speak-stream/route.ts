@@ -224,10 +224,10 @@ export async function POST(req: Request) {
                   if (freshInterview && freshInterview.transcript.length > 0 && !freshInterview.scorecard) {
                     if (await startScoring(interviewId)) {
                       const raw = await generateScorecard(freshInterview);
+                      const { parseScorecardJSON } = await import("@/lib/parse-scorecard");
                       let parsed;
-                      try { parsed = JSON.parse(raw); } catch {
-                        const match = raw.match(/\{[\s\S]*\}/);
-                        if (match) parsed = JSON.parse(match[0]);
+                      try { parsed = parseScorecardJSON(raw); } catch (parseErr) {
+                        console.error(`[Stream] Scorecard parse failed for ${interviewId}:`, parseErr);
                       }
                       if (parsed) {
                         const scorecard = normalizeScorecard(parsed);

@@ -3,6 +3,7 @@ import { getInterview, updateInterview } from "@/lib/store";
 import { generateScorecard } from "@/lib/ai";
 import { startScoring, completeScoring, failScoring } from "@/lib/scoring-tracker";
 import { normalizeScorecard } from "@/lib/normalize-scorecard";
+import { parseScorecardJSON } from "@/lib/parse-scorecard";
 import { validateAccess } from "@/lib/auth-check";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -17,6 +18,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!interview) {
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });
   }
+
+  // Log who's calling this — helps debug the "refresh completes interview" issue
+  const caller = req.headers.get("referer") || "unknown";
+  const ua = req.headers.get("user-agent")?.substring(0, 40) || "unknown";
+  console.log(`[Interview/end] ${id} called from referer=${caller} ua=${ua} currentStatus=${interview.status}`);
 
   // Mark as completed
   await updateInterview(id, {
@@ -49,37 +55,7 @@ async function generateScorecardInBackground(id: string, interview: any) {
   try {
     console.log(`[Auto-Score] Generating scorecard for interview ${id}...`);
     const scorecardRaw = await generateScorecard(interview);
-
-    let parsed;
-    try {
-      parsed = JSON.parse(scorecardRaw);
-    } catch {
-      // Try to extract JSON from response
-      const jsonMatch = scorecardRaw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]);
-        } catch {
-          // Try fixing common JSON issues: trailing commas, truncated arrays
-          let fixed = jsonMatch[0]
-            .replace(/,\s*}/g, "}")     // trailing comma before }
-            .replace(/,\s*]/g, "]")     // trailing comma before ]
-            .replace(/\.\.\./g, "")     // literal ...
-            .replace(/,\s*$/, "");      // trailing comma at end
-          // If JSON is truncated, try to close it
-          const openBraces = (fixed.match(/{/g) || []).length;
-          const closeBraces = (fixed.match(/}/g) || []).length;
-          const openBrackets = (fixed.match(/\[/g) || []).length;
-          const closeBrackets = (fixed.match(/]/g) || []).length;
-          for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += "]";
-          for (let i = 0; i < openBraces - closeBraces; i++) fixed += "}";
-          parsed = JSON.parse(fixed);
-        }
-      } else {
-        throw new Error("Could not parse scorecard JSON from: " + scorecardRaw.substring(0, 200));
-      }
-    }
-
+    const parsed = parseScorecardJSON(scorecardRaw);
     const scorecard = normalizeScorecard(parsed);
 
     await updateInterview(id, { scorecard });
