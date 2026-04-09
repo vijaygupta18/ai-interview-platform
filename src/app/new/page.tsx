@@ -6,7 +6,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 
 const LEVELS = ["Intern", "Junior", "Mid", "Senior", "Staff", "Principal", "Manager", "Director"];
 const DURATIONS = [10, 15, 20, 30, 45, 60];
-const ROUND_TYPES = ["General", "Technical", "Behavioral", "System Design", "Coding", "HR", "Culture Fit", "Managerial", "Case Study"];
+const ROUND_TYPES = ["General", "Technical", "Behavioral", "System Design", "Coding", "HR", "Culture Fit", "Managerial", "Case Study", "Puzzle"];
 const CODING_LANGUAGES = ["JavaScript", "TypeScript", "Python", "Java", "C++", "Go", "Rust", "Haskell", "Kotlin", "Swift", "Ruby", "C#", "Scala", "SQL", "PHP"];
 const FOCUS_AREAS = [
   "Technical Skills", "Behavioral", "System Design", "Problem Solving",

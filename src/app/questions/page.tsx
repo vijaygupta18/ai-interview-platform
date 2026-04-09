@@ -14,7 +14,7 @@ interface QuestionBank {
   questions: string[];
 }
 
-const ROUND_TYPES = ["Technical", "Behavioral", "System Design", "Coding"];
+const ROUND_TYPES = ["Technical", "Behavioral", "System Design", "Coding", "Puzzle", "HR", "Case Study"];
 
 export default function QuestionsPage() {
   const [banks, setBanks] = useState<QuestionBank[]>([]);
