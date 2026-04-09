@@ -1,3 +1,5 @@
+import { jsonrepair } from "jsonrepair";
+
 /**
  * Robust scorecard JSON parser.
  *
@@ -7,9 +9,10 @@
  *   - Trailing commas
  *   - Truncated (unclosed braces/brackets)
  *   - Literal "..." as a placeholder
+ *   - Unescaped double-quotes inside string values (e.g. candidate quotes)
  *
- * This parser tries several repair strategies in order and throws only if
- * all strategies fail.
+ * This parser tries several repair strategies in order, falling back to
+ * the battle-tested `jsonrepair` library as a final attempt before throwing.
  */
 export function parseScorecardJSON(raw: string): any {
   if (!raw || typeof raw !== "string") {
@@ -89,6 +92,19 @@ export function parseScorecardJSON(raw: string): any {
 
   try {
     return JSON.parse(fixed);
+  } catch {}
+
+  // Strategy 8: jsonrepair (battle-tested library — handles unescaped quotes
+  // inside strings, missing commas, and many other LLM-generated JSON issues)
+  try {
+    const repaired = jsonrepair(block);
+    return JSON.parse(repaired);
+  } catch {}
+
+  // Last resort: try jsonrepair on the raw input (in case extract failed)
+  try {
+    const repaired = jsonrepair(raw);
+    return JSON.parse(repaired);
   } catch (finalErr) {
     throw new Error(
       `Scorecard JSON parse failed after all repair strategies. ` +
