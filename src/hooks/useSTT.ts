@@ -59,8 +59,8 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     finalBufferRef.current += (finalBufferRef.current ? " " : "") + text;
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    // 3s of silence before triggering AI response — gives candidates time to think
-    const delay = 3000;
+    // 4s of silence before triggering AI response — gives candidates time to think
+    const delay = 4000;
     silenceTimerRef.current = setTimeout(() => {
       if (stoppedRef.current || isEnding.current) return;
       const full = finalBufferRef.current.trim();

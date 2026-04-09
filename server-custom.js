@@ -37,7 +37,7 @@ function getSTTConfig() {
     return { provider: "sarvam", wsUrl: `wss://api.sarvam.ai/speech-to-text-streaming/transcribe/ws?api_subscription_key=${k}&language_code=${language}&model=saaras:v3`, headers: { "Api-Subscription-Key": k } };
   }
   const k = process.env.DEEPGRAM_API_KEY || "";
-  return { provider: "deepgram", wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-3&language=${language}&punctuate=true&interim_results=true&endpointing=800&vad_events=true&diarize=true&utterance_end_ms=3000`, protocols: ["token", k] };
+  return { provider: "deepgram", wsUrl: `wss://api.deepgram.com/v1/listen?model=nova-3&language=${language}&punctuate=true&interim_results=true&endpointing=800&vad_events=true&diarize=true&utterance_end_ms=4000`, protocols: ["token", k] };
 }
 
 function addWSProxy(server) {
