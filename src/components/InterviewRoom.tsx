@@ -84,6 +84,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [isEnding, setIsEnding] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [chatInput, setChatInput] = useState("");
 
   // Pre-interview checks
   const [cameraReady, setCameraReady] = useState(false);
@@ -636,6 +637,22 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     },
     [interviewId, speakText]
   );
+
+  // Send a typed chat message — routes through the same pipeline as STT
+  const sendChatMessage = useCallback(() => {
+    const text = chatInput.trim();
+    if (!text) return;
+    if (isProcessingRef.current || isAISpeakingRef.current || isAIThinking) return;
+    setChatInput("");
+    setInterimTranscript("");
+    lastActivityRef.current = Date.now();
+    const entry: TranscriptEntry = { role: "candidate", text, timestamp: Date.now() };
+    setTranscript((prev) => {
+      const updated = [...prev, entry];
+      getAIResponse(updated);
+      return updated;
+    });
+  }, [chatInput, isAIThinking, getAIResponse]);
 
   // Silence watchdog — if no activity for 45s AND no interim speech, nudge AI
   useEffect(() => { lastActivityRef.current = Date.now(); }, [transcript]);
@@ -1351,7 +1368,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               <span className="text-xs text-green-400">Screen sharing active</span>
             </div>
           )}
-          <div className="glass flex-1 overflow-y-auto rounded-2xl p-4">
+          <div className="glass flex-1 flex flex-col rounded-2xl min-h-0">
+            <div className="flex-1 overflow-y-auto p-4">
             <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -1411,6 +1429,36 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 </div>
               )}
               <div ref={transcriptEndRef} />
+            </div>
+            </div>
+            {/* Chat input — type messages alongside voice */}
+            <div className="border-t border-white/5 p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendChatMessage();
+                    }
+                  }}
+                  placeholder={isAISpeaking ? "AI is speaking..." : isAIThinking ? "AI is thinking..." : "Type a message or use voice..."}
+                  disabled={isAISpeaking || isAIThinking}
+                  className="flex-1 rounded-lg bg-zinc-800/60 border border-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 focus:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={!chatInput.trim() || isAISpeaking || isAIThinking}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Send (Enter)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
