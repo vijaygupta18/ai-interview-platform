@@ -91,8 +91,14 @@ export default function InterviewDetailPage({ params }: { params: { id: string }
 
   useEffect(() => {
     fetch(`/api/interview/${params.id}?photos=true`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const data = await r.json();
+        if (!data || data.error || !data.focusAreas) return null;
+        return data;
+      })
       .then((data) => {
+        if (!data) { setInterview(null); return; }
         if (data.scorecard && !data.scorecard.scores && data.scorecard.technicalDepth !== undefined) {
           data.scorecard = normalizeScorecard(data.scorecard);
         }

@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Not available for sharing" }, { status: 404 });
   }
 
-  const { authorized } = await validateAccess(req, id);
+  const { authorized, session } = await validateAccess(req, id);
   if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -37,8 +37,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });
   }
 
-  // Check if the interview link has expired
-  if (interview.expiresAt && new Date(interview.expiresAt) < new Date()) {
+  // Expiration only applies to candidates (token-based access).
+  // Interviewers (session-based) can always view past interviews.
+  if (!session && interview.expiresAt && new Date(interview.expiresAt) < new Date()) {
     return NextResponse.json({ error: "This interview link has expired", expired: true }, { status: 410 });
   }
 
