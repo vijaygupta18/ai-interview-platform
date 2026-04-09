@@ -166,7 +166,10 @@ export async function POST(req: Request) {
               if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
               try {
                 const json = JSON.parse(line.slice(6));
-                const token = json.choices?.[0]?.delta?.content || "";
+                // Some models (e.g. MiniMax-M2.5) emit text in `reasoning_content`
+                // when content is null, even with thinking disabled. Read both.
+                const delta = json.choices?.[0]?.delta || {};
+                const token = delta.content || delta.reasoning_content || "";
                 if (!token) continue;
                 buffer += token;
                 fullText += token;

@@ -293,7 +293,10 @@ async function callJuspayAI(
   }
 
   const data = await res.json();
-  const content = data.choices?.[0]?.message?.content || "";
+  // Some models (e.g. MiniMax-M2.5) emit text in `reasoning_content`
+  // when content is null, even with thinking disabled. Read both.
+  const message = data.choices?.[0]?.message || {};
+  const content = message.content || message.reasoning_content || "";
   return stripThinking(content);
 }
 
