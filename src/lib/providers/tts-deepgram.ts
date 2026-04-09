@@ -9,19 +9,29 @@ export class DeepgramTTS implements TTSProvider {
     if (!apiKey) throw new Error("DEEPGRAM_API_KEY not configured");
     if (!text || !text.trim()) throw new Error("Empty text for TTS");
 
-    const res = await fetch("https://api.deepgram.com/v1/speak?model=aura-angus-en", {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: text.trim() }),
-    });
+    // 15s hard timeout — without this, if Deepgram is slow/hung, the entire
+    // streaming pipeline hangs forever and the client safety timeout fires at 30s.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      throw new Error(`Deepgram TTS error: ${res.status} ${errBody.substring(0, 200)}`);
+    try {
+      const res = await fetch("https://api.deepgram.com/v1/speak?model=aura-angus-en", {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: text.trim() }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        throw new Error(`Deepgram TTS error: ${res.status} ${errBody.substring(0, 200)}`);
+      }
+      return Buffer.from(await res.arrayBuffer());
+    } finally {
+      clearTimeout(timeout);
     }
-    return Buffer.from(await res.arrayBuffer());
   }
 }

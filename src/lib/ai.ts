@@ -293,10 +293,10 @@ async function callJuspayAI(
   }
 
   const data = await res.json();
-  // Some models (e.g. MiniMax-M2.5) emit text in `reasoning_content`
-  // when content is null, even with thinking disabled. Read both.
-  const message = data.choices?.[0]?.message || {};
-  const content = message.content || message.reasoning_content || "";
+  // IMPORTANT: only read `content`, NOT `reasoning_content`.
+  // M2.5 returns both fields — content is the real response, reasoning_content
+  // is the model's internal thinking. We must not speak the thinking.
+  const content = data.choices?.[0]?.message?.content || "";
   return stripThinking(content);
 }
 
@@ -324,8 +324,10 @@ export function buildInterviewPrompt(
     { role: "assistant", content: "Got it, I have the resume. Ready to begin the interview." },
   ];
 
-  const trimmedTranscript = transcript.length > 80
-    ? [...transcript.slice(0, 5), ...transcript.slice(-75)]
+  // M2.5 has 256K context — we have plenty of room. Only trim very long
+  // sessions (>200 messages ≈ ~2 hours). Keep first 10 (intro context) + last 190.
+  const trimmedTranscript = transcript.length > 200
+    ? [...transcript.slice(0, 10), ...transcript.slice(-190)]
     : transcript;
 
   for (const entry of trimmedTranscript) {

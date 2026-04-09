@@ -99,6 +99,9 @@ export async function POST(req: Request) {
           closed = true;
           try { controller.close(); } catch {}
         };
+        // 25s hard timeout on AI fetch — must be less than client's 30s safety timeout
+        const aiAbort = new AbortController();
+        const aiTimeout = setTimeout(() => aiAbort.abort(), 25000);
         try {
           const aiRes = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
             method: "POST",
@@ -114,6 +117,7 @@ export async function POST(req: Request) {
               thinking: { type: "disabled" },
               stream: true,
             }),
+            signal: aiAbort.signal,
           });
 
           if (!aiRes.ok || !aiRes.body) {
@@ -166,10 +170,12 @@ export async function POST(req: Request) {
               if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
               try {
                 const json = JSON.parse(line.slice(6));
-                // Some models (e.g. MiniMax-M2.5) emit text in `reasoning_content`
-                // when content is null, even with thinking disabled. Read both.
+                // IMPORTANT: only read `content`, NOT `reasoning_content`.
+                // Some models (e.g. MiniMax-M2.5) stream reasoning_content first
+                // (the model's internal thinking) followed by the actual content.
+                // We must not speak the model's reasoning out loud — skip it.
                 const delta = json.choices?.[0]?.delta || {};
-                const token = delta.content || delta.reasoning_content || "";
+                const token = delta.content || "";
                 if (!token) continue;
                 buffer += token;
                 fullText += token;
@@ -244,6 +250,8 @@ export async function POST(req: Request) {
           console.error("[Stream] Error:", err);
           safeEnqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`));
           safeClose();
+        } finally {
+          clearTimeout(aiTimeout);
         }
       },
     });
