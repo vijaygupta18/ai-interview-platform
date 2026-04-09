@@ -73,9 +73,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         devtools_open: 60000,
         phone_detected: 30000,
         fullscreen_exit: 10000,
-        window_blur: 10000,
+        window_blur: 30000, // 30s — be lenient, candidates may briefly switch contexts
         virtual_camera: 300000,
-        copy_paste: 10000,
       };
       const cooldown = cooldowns[type] || 5000;
       const lastTime = lastAlertTimeRef.current[type] || 0;
@@ -123,12 +122,13 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     let lastAlert = 0;
     let shortBlurCount = 0;
     let shortBlurResetTimer: NodeJS.Timeout | null = null;
+    let pollLostStart = 0; // tracks sustained focus loss across polls
 
     const fireAlert = (duration: number) => {
       const now = Date.now();
-      if (now - lastAlert < 5000) return; // 5s global debounce
+      if (now - lastAlert < 10000) return; // 10s global debounce (was 5s)
       lastAlert = now;
-      if (duration > 10000) {
+      if (duration > 15000) {
         alert("window_blur", "flag", `Candidate left the interview window for ${Math.round(duration / 1000)}s`);
       } else {
         alert("window_blur", "flag", `Candidate left the interview window briefly`);
@@ -140,15 +140,15 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (!blurStart) return;
       const duration = Date.now() - blurStart;
       blurStart = 0;
-      if (duration > 2000) {
-        // Sustained loss >2s — definite flag
+      // Only flag sustained loss >5s (was 2s) — typing into chat may briefly blur the window
+      if (duration > 5000) {
         fireAlert(duration);
       } else {
-        // Short blur — track frequency. 3+ short blurs in 60s = suspicious
+        // Short blur — track frequency. 5+ short blurs in 120s = suspicious (was 3 in 60s)
         shortBlurCount++;
         if (shortBlurResetTimer) clearTimeout(shortBlurResetTimer);
-        shortBlurResetTimer = setTimeout(() => { shortBlurCount = 0; }, 60000);
-        if (shortBlurCount >= 3) {
+        shortBlurResetTimer = setTimeout(() => { shortBlurCount = 0; }, 120000);
+        if (shortBlurCount >= 5) {
           fireAlert(duration);
           shortBlurCount = 0;
         }
@@ -162,7 +162,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       } else if (blurStart) {
         const duration = Date.now() - blurStart;
         blurStart = 0;
-        if (duration > 2000) fireAlert(duration);
+        if (duration > 5000) fireAlert(duration);
       }
     };
 
@@ -170,15 +170,19 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Periodic focus poll — catches tab/window switches that blur/visibility miss
-    // (e.g., sharing a specific tab, Cmd+Tab on macOS fullscreen, OS-level overlays)
+    // Periodic focus poll — catches tab/window switches blur/visibility miss.
+    // Now requires SUSTAINED loss (≥10s) before firing, not just one missed poll.
     const focusPoll = setInterval(() => {
       if (!document.hasFocus()) {
-        const now = Date.now();
-        if (now - lastAlert > 5000) {
-          lastAlert = now;
-          alert("window_blur", "flag", "Candidate left the interview window");
+        if (!pollLostStart) {
+          pollLostStart = Date.now();
+        } else if (Date.now() - pollLostStart > 10000) {
+          // 10s of sustained focus loss confirmed by polling
+          fireAlert(Date.now() - pollLostStart);
+          pollLostStart = 0;
         }
+      } else {
+        pollLostStart = 0;
       }
     }, 5000);
 
@@ -191,28 +195,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     };
   }, [enabled, alert]);
 
-  // Copy-paste blocking — logged as info, NOT counted as strike
-  useEffect(() => {
-    if (!enabled) return;
-    const blockClipboard = (e: ClipboardEvent) => {
-      e.preventDefault();
-      alert("copy_paste", "info", "Clipboard action blocked");
-    };
-    const blockKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && ["c", "v"].includes(e.key)) {
-        e.preventDefault();
-        alert("copy_paste", "info", "Keyboard shortcut blocked");
-      }
-    };
-    document.addEventListener("copy", blockClipboard);
-    document.addEventListener("paste", blockClipboard);
-    document.addEventListener("keydown", blockKey);
-    return () => {
-      document.removeEventListener("copy", blockClipboard);
-      document.removeEventListener("paste", blockClipboard);
-      document.removeEventListener("keydown", blockKey);
-    };
-  }, [enabled, alert]);
+  // Copy/paste blocking REMOVED — candidates can now type messages in the
+  // chat input and need to paste code/text. Keyboard shortcuts allowed.
 
   // Second monitor / extended display detection
   useEffect(() => {
