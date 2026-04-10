@@ -118,8 +118,9 @@ export async function POST(req: Request) {
                 messages: aiMessages,
                 max_tokens: 500,
                 temperature: 0.3,
-                thinking: { type: "disabled" },
                 stream: true,
+                // Only send thinking param for MiniMax models (Groq/OpenAI reject it)
+                ...((process.env.AI_MODEL || "").includes("minimax") ? { thinking: { type: "disabled" } } : {}),
               }),
               signal: abort.signal,
             });

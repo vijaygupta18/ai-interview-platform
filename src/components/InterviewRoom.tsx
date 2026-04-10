@@ -856,7 +856,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       // (they still log to DB for interviewer review, just no candidate-facing toast)
       const strikeWeights: Record<string, number> = {
         face_missing: 0.25,
-        multiple_faces: 0.5,
+        multiple_faces: 1,
         screen_share_stopped: 0.5,
         fullscreen_exit: 0.25,
         window_blur: 0.25,

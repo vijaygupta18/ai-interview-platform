@@ -367,13 +367,9 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
           consecutiveFaceMissing = 0;
         }
       } else if (faceCount > 1) {
-        consecutiveMultipleFaces++;
         consecutiveFaceMissing = 0;
-        // Only alert after 2 consecutive detections (~12s) — handles family walking behind briefly
-        if (consecutiveMultipleFaces >= 2) {
-          alert("multiple_faces", "flag", `${faceCount} faces detected`);
-          consecutiveMultipleFaces = 0;
-        }
+        // Fire immediately — multiple faces is a strong cheating signal
+        alert("multiple_faces", "flag", `${faceCount} faces detected`);
       } else {
         // Face detected normally — reset counters
         consecutiveFaceMissing = 0;

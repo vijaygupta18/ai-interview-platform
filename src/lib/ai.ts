@@ -286,7 +286,7 @@ async function callJuspayAI(
       messages,
       max_tokens: maxTokens,
       temperature,
-      thinking: { type: "disabled" },
+      ...((process.env.AI_MODEL || "").includes("minimax") ? { thinking: { type: "disabled" } } : {}),
     }),
     signal: controller.signal,
   });
