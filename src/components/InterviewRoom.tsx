@@ -225,9 +225,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             );
           }
 
-          // Fetch server-side violation count for resume
+          // Fetch server-side violation count + config for resume
           try {
-            const violationRes = await fetch(`/api/interview/${interviewId}/violations${tokenParam}`);
+            const [violationRes, cfgRes] = await Promise.all([
+              fetch(`/api/interview/${interviewId}/violations${tokenParam}`),
+              fetch("/api/config").then(r => r.json()).catch(() => null),
+            ]);
+            const maxStrikes = cfgRes?.maxProctoringStrikes || 25;
             if (violationRes.ok) {
               const { count } = await violationRes.json();
               // Apply time-based decay: subtract 0.5 for every 5 minutes since interview started
@@ -236,7 +240,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               const decayAmount = Math.floor(elapsedMinutes / 5) * 0.5;
               const adjustedCount = Math.max(0, count - decayAmount);
               setProctoringWarnings(adjustedCount);
-              const maxStrikes = runtimeConfig.maxProctoringStrikes;
               if (count >= maxStrikes) setShowProctoringBan(true);
             }
           } catch (err) {
@@ -874,20 +877,21 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }).catch(() => {});
       }
 
-      // Track violations — weighted by severity (consistent with server-side getProctoringViolationCount)
+      // Only 5 checks active — catches real cheating, tolerant of bad lighting/cameras
       const strikeWeights: Record<string, number> = {
-        face_missing: 0.5,   // could be sneeze/lean — low risk
-        eye_away: 0.5,       // looking sideways briefly — low risk
-        fullscreen_exit: 1,  // left fullscreen — medium risk
-        window_blur: 1,      // switched tab/window — medium risk
-        phone_detected: 1,   // bright object — medium risk (can be false positive)
-        multiple_faces: 1,   // another person — medium risk
-        second_monitor: 1,   // extended display — medium risk
-        devtools_open: 1,    // dev tools — medium risk
-        screen_share_stopped: 1, // stopped sharing — medium risk
-        virtual_camera: 1,   // OBS/fake camera — medium risk
-        heartbeat_missing: 1, // proctoring disabled — medium risk
-        multiple_voices: 1,  // someone else speaking — medium risk
+        face_missing: 0.5,       // bad camera/lighting can trigger — keep low
+        multiple_faces: 1,       // someone else helping — real signal
+        screen_share_stopped: 1, // deliberately hiding screen — real signal
+        fullscreen_exit: 0.5,    // already has 30s re-enter prompt, don't double-punish
+        window_blur: 0.5,        // notifications, clock glances — noisy
+        // DISABLED — too many false positives for interview practice:
+        // eye_away: fires when typing in chat, looking at keyboard, thinking
+        // phone_detected: desk lamps, mugs, monitor reflections trigger it
+        // second_monitor: developers legitimately use dual monitors
+        // devtools_open: unreliable detection, varies by screen/dock mode
+        // virtual_camera: too niche
+        // heartbeat_missing: network blip = false strike
+        // multiple_voices: only works with Deepgram diarization
       };
       const effectiveSeverity = event.severity || "flag";
       const weight = strikeWeights[event.type] || 0;
