@@ -40,9 +40,7 @@ function SectionHeader({ step, title, subtitle }: { step: number; title: string;
 
 export default function NewInterviewPage() {
   const { data: session } = useSession();
-  const [email, setEmail] = useState(""); // supports multiple: comma or newline separated
-  const [candidateName, setCandidateName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [candidates, setCandidates] = useState([{ email: "", name: "", phone: "" }]);
   const [role, setRole] = useState("");
   const [level, setLevel] = useState("Senior");
   const [duration, setDuration] = useState(30);
@@ -94,13 +92,13 @@ export default function NewInterviewPage() {
     }
   }, []);
 
-  // Parse emails: comma, semicolon, or newline separated
-  const parseEmails = (raw: string) =>
-    raw.split(/[,;\n]+/).map(e => e.trim()).filter(e => e && e.includes("@"));
+  const addCandidate = () => setCandidates(prev => [...prev, { email: "", name: "", phone: "" }]);
+  const removeCandidate = (i: number) => setCandidates(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
+  const updateCandidate = (i: number, field: string, value: string) => setCandidates(prev => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
 
-  const emails = parseEmails(email);
+  const validCandidates = candidates.filter(c => c.email.trim() && c.email.includes("@"));
   const hasContext = file || additionalContext.trim().length > 0 || selectedBankId;
-  const canSubmit = role && emails.length > 0 && hasContext && !submitting;
+  const canSubmit = role && validCandidates.length > 0 && hasContext && !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,12 +108,13 @@ export default function NewInterviewPage() {
     setBulkResults([]);
 
     try {
-      if (emails.length === 1) {
+      if (validCandidates.length === 1) {
         // Single candidate — original flow
+        const c = validCandidates[0];
         const formData = new FormData();
-        formData.append("candidateEmail", emails[0]);
-        if (candidateName.trim()) formData.append("candidateName", candidateName.trim());
-        if (phone.trim()) formData.append("candidatePhone", phone.trim());
+        formData.append("candidateEmail", c.email.trim());
+        if (c.name.trim()) formData.append("candidateName", c.name.trim());
+        if (c.phone.trim()) formData.append("candidatePhone", c.phone.trim());
         formData.append("role", role);
         formData.append("level", level);
         formData.append("duration", String(duration));
@@ -137,12 +136,14 @@ export default function NewInterviewPage() {
           setInterviewLink(link);
         }
       } else {
-        // Bulk — create one interview per email with the same settings
+        // Bulk — create one interview per candidate with the same settings
         const results: { email: string; link: string; error?: string }[] = [];
-        for (const candidateEmail of emails) {
+        for (const c of validCandidates) {
           try {
             const formData = new FormData();
-            formData.append("candidateEmail", candidateEmail);
+            formData.append("candidateEmail", c.email.trim());
+            if (c.name.trim()) formData.append("candidateName", c.name.trim());
+            if (c.phone.trim()) formData.append("candidatePhone", c.phone.trim());
             formData.append("role", role);
             formData.append("level", level);
             formData.append("duration", String(duration));
@@ -160,12 +161,12 @@ export default function NewInterviewPage() {
               const link = data.token
                 ? `${window.location.origin}/interview/${data.id}?token=${data.token}`
                 : `${window.location.origin}/interview/${data.id}`;
-              results.push({ email: candidateEmail, link });
+              results.push({ email: c.email.trim(), link });
             } else {
-              results.push({ email: candidateEmail, link: "", error: data.error || "Failed" });
+              results.push({ email: c.email.trim(), link: "", error: data.error || "Failed" });
             }
           } catch {
-            results.push({ email: candidateEmail, link: "", error: "Request failed" });
+            results.push({ email: c.email.trim(), link: "", error: "Request failed" });
           }
         }
         setBulkResults(results);
@@ -260,7 +261,7 @@ export default function NewInterviewPage() {
                   >
                     Copy All Links
                   </button>
-                  <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setEmail(""); setCandidateName(""); setAdditionalContext(""); }}
+                  <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setCandidates([{email:"",name:"",phone:""}]); setAdditionalContext(""); }}
                     className="btn-primary flex-1">
                     Create More
                   </button>
@@ -291,17 +292,17 @@ export default function NewInterviewPage() {
                 <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <p className="text-sm text-green-700">Interview invite email sent to <strong>{email}</strong></p>
+                <p className="text-sm text-green-700">Interview invite email sent to <strong>{candidates[0]?.email}</strong></p>
               </div>
             ) : (
               <p className="text-xs text-gray-400 text-center">No email template was selected — share the link manually.</p>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setEmail(""); setCandidateName(""); setAdditionalContext(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
+              <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setCandidates([{email:"",name:"",phone:""}]); setAdditionalContext(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
                 Create Another
               </button>
               <button
-                onClick={() => { window.location.href = `mailto:${email}?subject=Your Interview&body=Here is your interview link: ${encodeURIComponent(interviewLink)}`; }}
+                onClick={() => { window.location.href = `mailto:${candidates[0]?.email || ""}?subject=Your Interview&body=Here is your interview link: ${encodeURIComponent(interviewLink)}`; }}
                 className="btn-secondary flex-1"
               >
                 Open in Mail App
@@ -316,30 +317,44 @@ export default function NewInterviewPage() {
 
             {/* Section 1: Candidate Info */}
             <div className="card p-6 animate-fade-in-up border-l-4 border-l-indigo-500">
-              <SectionHeader step={1} title="Candidate Information" subtitle="Who are you interviewing?" />
+              <SectionHeader step={1} title="Candidate Information" subtitle={candidates.length > 1 ? `${candidates.length} candidates` : "Who are you interviewing?"} />
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="label">
-                      Candidate Email{emails.length > 1 ? "s" : ""} <span className="text-red-400">*</span>
-                      {emails.length > 1 && <span className="text-indigo-500 font-normal ml-1">({emails.length} candidates)</span>}
-                    </label>
-                    <textarea required value={email} onChange={(e) => setEmail(e.target.value)}
-                      placeholder={"candidate@example.com\n\nFor bulk: paste multiple emails\n(comma, semicolon, or one per line)"}
-                      rows={emails.length > 1 ? 3 : 1}
-                      className="input-field resize-none" />
+                {candidates.map((c, i) => (
+                  <div key={i} className={`grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-3 ${i > 0 ? "pt-3 border-t border-gray-100" : ""}`}>
+                    <div>
+                      {i === 0 && <label className="label">Email <span className="text-red-400">*</span></label>}
+                      <input type="email" required value={c.email} onChange={(e) => updateCandidate(i, "email", e.target.value)}
+                        placeholder="candidate@example.com" className="input-field" />
+                    </div>
+                    <div>
+                      {i === 0 && <label className="label">Name <span className="text-gray-400 font-normal">(optional)</span></label>}
+                      <input type="text" value={c.name} onChange={(e) => updateCandidate(i, "name", e.target.value)}
+                        placeholder="e.g. Vijay Gupta" className="input-field" />
+                    </div>
+                    <div>
+                      {i === 0 && <label className="label">Phone <span className="text-gray-400 font-normal">(optional)</span></label>}
+                      <input type="tel" value={c.phone} onChange={(e) => updateCandidate(i, "phone", e.target.value)}
+                        placeholder="+91 98765 43210" className="input-field" />
+                    </div>
+                    <div className={i === 0 ? "mt-6" : ""}>
+                      {candidates.length > 1 && (
+                        <button type="button" onClick={() => removeCandidate(i)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <label className="label">Candidate Name <span className="text-gray-400 font-normal">(optional)</span></label>
-                    <input type="text" value={candidateName} onChange={(e) => setCandidateName(e.target.value)}
-                      placeholder="e.g. Vijay Gupta" className="input-field" />
-                  </div>
-                  <div>
-                    <label className="label">Phone <span className="text-gray-400 font-normal">(optional)</span></label>
-                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+91 98765 43210" className="input-field" />
-                  </div>
-                </div>
+                ))}
+                <button type="button" onClick={addCandidate}
+                  className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 transition">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Another Candidate
+                </button>
                 <div>
                   <label className="label">Role <span className="text-red-400">*</span></label>
                   <input type="text" required value={role} onChange={(e) => setRole(e.target.value)}
@@ -551,10 +566,10 @@ export default function NewInterviewPage() {
                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
                       <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
                     </svg>
-                    {emails.length > 1 ? `Creating ${emails.length} Interviews...` : "Creating Interview..."}
+                    {validCandidates.length > 1 ? `Creating ${validCandidates.length} Interviews...` : "Creating Interview..."}
                   </span>
                 ) : (
-                  emails.length > 1 ? `Create ${emails.length} Interviews` : "Create Interview"
+                  validCandidates.length > 1 ? `Create ${validCandidates.length} Interviews` : "Create Interview"
                 )}
               </button>
               {!hasContext && (

@@ -87,8 +87,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [chatInput, setChatInput] = useState("");
 
   // Runtime config from /api/config — avoids NEXT_PUBLIC_* build-time baking
+  // Default must be HIGH to avoid false terminations before config loads
   const [runtimeConfig, setRuntimeConfig] = useState({
-    maxProctoringStrikes: 20,
+    maxProctoringStrikes: 999,
     sttProviders: ["deepgram", "browser"] as ("deepgram" | "browser")[],
     sttBackend: "deepgram",
     silenceDelayMs: 4000,
@@ -96,6 +97,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   useEffect(() => {
     fetch("/api/config").then(r => r.json()).then(cfg => {
       setRuntimeConfig(prev => ({ ...prev, ...cfg }));
+      console.log(`[Config] STT=${cfg.sttBackend} strikes=${cfg.maxProctoringStrikes} silence=${cfg.silenceDelayMs}ms env=${cfg.environment}`);
     }).catch(() => {});
   }, []);
 
@@ -127,6 +129,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const speakTextRef = useRef<(text: string) => Promise<void>>();
   const needsResumeRef = useRef(false);
   const tokenRef = useRef("");
+  const generationRef = useRef(0);
+  const activeAbortRef = useRef<AbortController | null>(null);
+  const activeReaderRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   const supportsFullscreen = typeof document !== "undefined" && typeof document.documentElement.requestFullscreen === "function";
 
@@ -392,9 +397,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     isEndingRef.current = true;
 
     async function autoEnd() {
+      // Cancel any active AI pipeline
+      if (activeAbortRef.current) { activeAbortRef.current.abort(); activeAbortRef.current = null; }
+      if (activeReaderRef.current) { try { activeReaderRef.current.cancel(); } catch {} activeReaderRef.current = null; }
+      isProcessingRef.current = false;
+
       if (currentAudioRef.current) {
+        const audioUrl = currentAudioRef.current.src;
         currentAudioRef.current.pause();
         currentAudioRef.current = null;
+        if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
       }
 
       // Stop STT/recording first so no new speech comes in
@@ -424,7 +436,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
 
       // End interview + auto-score in background on server
-      fetch(`/api/interview/${interviewId}/end`, { method: "POST" }).catch(console.error);
+      fetch(`/api/interview/${interviewId}/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenRef.current }),
+      }).catch(console.error);
 
       // Redirect to completion page
       window.location.href = `/completed/${interviewId}`;
@@ -509,12 +525,19 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (isEndingRef.current) return;
       isProcessingRef.current = true;
       setIsAIThinking(true);
+      const thisGeneration = ++generationRef.current;
+
+      // Abort any previous in-flight request
+      if (activeAbortRef.current) { activeAbortRef.current.abort(); }
+      const abortController = new AbortController();
+      activeAbortRef.current = abortController;
 
       // Safety timeout — if AI call hangs for >30s, force-reset
       const safetyTimeout = setTimeout(() => {
-        if (isProcessingRef.current) {
+        if (isProcessingRef.current && generationRef.current === thisGeneration) {
           console.error("[AI] Safety timeout — force resetting after 30s");
           serverLog("error", "AI safety timeout — force reset after 30s", interviewId);
+          abortController.abort();
           isProcessingRef.current = false;
           setIsAIThinking(false);
           setIsAISpeaking(false);
@@ -528,6 +551,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ interviewId, transcript: currentTranscript, token: tokenRef.current, skipSave: options?.skipSave }),
+          signal: abortController.signal,
         });
 
         if (!res.ok || !res.body) {
@@ -559,16 +583,20 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
 
         // Parse SSE stream — play audio chunks in order
         const reader = res.body.getReader();
+        activeReaderRef.current = reader;
         const decoder = new TextDecoder();
         let sseBuffer = "";
         let fullText = "";
         const audioMap = new Map<number, { audio: string; contentType: string }>();
+        const skippedIdxs = new Set<number>();
         let nextPlayIdx = 0;
         let isPlaying = false;
         let transcriptAdded = false;
         let streamDone = false;
 
         const playNext = async () => {
+          // Skip over failed TTS chunks
+          while (skippedIdxs.has(nextPlayIdx)) { skippedIdxs.delete(nextPlayIdx); nextPlayIdx++; }
           if (isPlaying || !audioMap.has(nextPlayIdx)) return;
           isPlaying = true;
           const chunk = audioMap.get(nextPlayIdx)!;
@@ -611,6 +639,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 else { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: fullText }; return u; }); }
               }
               if (data.type === "audio") { audioMap.set(data.idx, { audio: data.audio, contentType: data.contentType }); playNext(); }
+              if (data.type === "audio_skip") { skippedIdxs.add(data.idx); playNext(); }
+              if (data.error) { console.error("[AI] Server error:", data.error); serverLog("error", `SSE error: ${data.error}`, interviewId); }
               if (data.type === "done") {
                 if (data.fullText) { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: data.fullText }; return u; }); }
                 // AI decided to end the interview — redirect after TTS finishes
@@ -637,15 +667,23 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         while ((audioMap.size > 0 || isPlaying) && waitCount < 200) { await new Promise((r) => setTimeout(r, 100)); waitCount++; }
         setIsAISpeaking(false); isAISpeakingRef.current = false; setCurrentAIText("");
       } catch (err) {
-        console.error("[AI] Response failed:", err);
-        serverLog("error", "AI response failed", interviewId, { error: String(err) });
+        if ((err as Error)?.name === "AbortError") {
+          console.log("[AI] Request aborted (superseded or ended)");
+        } else {
+          console.error("[AI] Response failed:", err);
+          serverLog("error", "AI response failed", interviewId, { error: String(err) });
+        }
         setIsAISpeaking(false);
         isAISpeakingRef.current = false;
         setCurrentAIText("");
       } finally {
         clearTimeout(safetyTimeout);
-        isProcessingRef.current = false;
-        setIsAIThinking(false);
+        activeReaderRef.current = null;
+        if (activeAbortRef.current === abortController) activeAbortRef.current = null;
+        if (generationRef.current === thisGeneration) {
+          isProcessingRef.current = false;
+          setIsAIThinking(false);
+        }
       }
     },
     [interviewId, speakText]
@@ -695,6 +733,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     isStarted,
     isEnding: isEndingRef,
     mediaStream: mediaStreamRef,
+    silenceDelayMs: runtimeConfig.silenceDelayMs,
     onInterim: (text) => {
       setInterimTranscript(text);
       if (text.trim()) lastActivityRef.current = Date.now();
@@ -753,16 +792,27 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     setIsEnding(true);
     setShowEndConfirm(false);
 
+    // Cancel any active AI pipeline
+    if (activeAbortRef.current) { activeAbortRef.current.abort(); activeAbortRef.current = null; }
+    if (activeReaderRef.current) { try { activeReaderRef.current.cancel(); } catch {} activeReaderRef.current = null; }
+    isProcessingRef.current = false;
+
     // Stop STT
     stt.stop();
     if (timerRef.current) clearInterval(timerRef.current);
     if (currentAudioRef.current) {
+      const audioUrl = currentAudioRef.current.src;
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
+      if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
     }
 
     // End interview + auto-score in background on server
-    fetch(`/api/interview/${interviewId}/end`, { method: "POST" }).catch(console.error);
+    fetch(`/api/interview/${interviewId}/end`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: tokenRef.current }),
+    }).catch(console.error);
 
     // Stop audio recording and upload
     if ((window as any).__stopAudioRecording) {
@@ -852,7 +902,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         });
       }
     },
-    [interviewId]
+    [interviewId, runtimeConfig.maxProctoringStrikes]
   );
 
   // Auto-end interview after max proctoring violations — give 10 seconds to read the message
@@ -864,8 +914,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       setIsEnding(true);
       stt.stop();
       if (timerRef.current) clearInterval(timerRef.current);
+      if (activeAbortRef.current) { activeAbortRef.current.abort(); activeAbortRef.current = null; }
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-      fetch(`/api/interview/${interviewId}/end`, { method: "POST" }).catch(console.error);
+      fetch(`/api/interview/${interviewId}/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenRef.current }),
+      }).catch(console.error);
       window.location.href = `/completed/${interviewId}`;
     }, 10000);
     return () => clearTimeout(timer);
@@ -1245,11 +1300,18 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
             <span className={`inline-flex h-2 w-2 rounded-full ${stt.connected ? "bg-green-500" : stt.everConnected ? "bg-red-500 animate-pulse" : "bg-yellow-500"}`} />
             <button
               onClick={() => {
+                if (activeAbortRef.current) { activeAbortRef.current.abort(); activeAbortRef.current = null; }
+                if (activeReaderRef.current) { try { activeReaderRef.current.cancel(); } catch {} activeReaderRef.current = null; }
                 isProcessingRef.current = false;
                 setIsAIThinking(false);
                 setIsAISpeaking(false);
                 isAISpeakingRef.current = false;
-                if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
+                if (currentAudioRef.current) {
+                  const audioUrl = currentAudioRef.current.src;
+                  currentAudioRef.current.pause();
+                  currentAudioRef.current = null;
+                  if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl);
+                }
                 setCurrentAIText("");
                 stt.stop();
                 setTimeout(() => stt.start(), 500);

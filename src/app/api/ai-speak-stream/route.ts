@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     }
 
     const MAX_STRIKES = parseInt(process.env.MAX_PROCTORING_STRIKES || process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "25");
+    console.log(`[Proctoring] Interview ${interviewId}: violations=${violations}/${MAX_STRIKES}`);
     if (violations >= MAX_STRIKES) {
       return new Response(JSON.stringify({ error: "Interview terminated" }), { status: 403 });
     }
@@ -134,9 +135,9 @@ export async function POST(req: Request) {
           const ttsPromises: Promise<void>[] = [];
 
           const processSentence = (sentence: string) => {
-            const idx = sentenceIdx++;
             const cleaned = stripThinking(sentence).replace(/\[END_INTERVIEW\]/g, "").trim();
             if (!cleaned) return;
+            const idx = sentenceIdx++;
 
             // Send original text for transcript
             safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text: cleaned, idx })}\n\n`));
@@ -156,6 +157,7 @@ export async function POST(req: Request) {
               })}\n\n`));
             }).catch((err: any) => {
               console.warn(`[Stream] TTS failed for sentence ${idx}:`, err.message);
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify({ type: "audio_skip", idx })}\n\n`));
             });
             ttsPromises.push(p);
           };

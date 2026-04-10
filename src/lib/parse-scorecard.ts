@@ -33,15 +33,36 @@ export function parseScorecardJSON(raw: string): any {
     return JSON.parse(fenceStripped);
   } catch {}
 
-  // Strategy 3: extract the first {...} block
-  const match = fenceStripped.match(/\{[\s\S]*\}/);
-  if (!match) {
+  // Strategy 3: extract the first COMPLETE JSON object by tracking brace depth
+  // (greedy regex \{[\s\S]*\} fails when AI returns two objects back-to-back)
+  let block = "";
+  const startIdx = fenceStripped.indexOf("{");
+  if (startIdx === -1) {
     throw new Error(
       "Scorecard: no JSON object found in response. Preview: " +
         raw.substring(0, 200)
     );
   }
-  let block = match[0];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = startIdx; i < fenceStripped.length; i++) {
+    const ch = fenceStripped[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (!inString) {
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          block = fenceStripped.slice(startIdx, i + 1);
+          break;
+        }
+      }
+    }
+  }
+  if (!block) block = fenceStripped.slice(startIdx); // fallback: take everything
 
   try {
     return JSON.parse(block);

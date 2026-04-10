@@ -12,6 +12,7 @@ interface UseSTTOptions {
   isStarted: boolean;
   isEnding: React.MutableRefObject<boolean>;
   mediaStream: React.MutableRefObject<MediaStream | null>;
+  silenceDelayMs?: number;
   onInterim: (text: string) => void;
   onComplete: (text: string) => void;
 }
@@ -25,7 +26,7 @@ interface UseSTTReturn {
 }
 
 export function useSTT(options: UseSTTOptions): UseSTTReturn {
-  const { providers, interviewId, token, isAISpeaking, isStarted, isEnding, mediaStream, onInterim, onComplete } = options;
+  const { providers, interviewId, token, isAISpeaking, isStarted, isEnding, mediaStream, silenceDelayMs = 4000, onInterim, onComplete } = options;
 
   const [connected, setConnected] = useState(false);
   const [everConnected, setEverConnected] = useState(false);
@@ -59,16 +60,14 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     finalBufferRef.current += (finalBufferRef.current ? " " : "") + text;
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    // 4s of silence before triggering AI response — gives candidates time to think
-    const delay = 4000;
     silenceTimerRef.current = setTimeout(() => {
       if (stoppedRef.current || isEnding.current) return;
       const full = finalBufferRef.current.trim();
       if (!full) return;
       finalBufferRef.current = "";
       onCompleteRef.current(full);
-    }, delay);
-  }, [isEnding]);
+    }, silenceDelayMs);
+  }, [isEnding, silenceDelayMs]);
 
   const handleInterimText = useCallback((text: string) => {
     onInterimRef.current(text);
@@ -96,12 +95,12 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       dgSocketRef.current = dgSocket;
 
       dgSocket.onopen = () => {
-        // #5: don't reset reconnectCount to 0 — let it only reset on explicit start()
+        reconnectCountRef.current = 0; // reset on successful connect — prevents death after 5 transient disconnects
         reconnectingRef.current = false;
         setConnected(true);
         setEverConnected(true);
         setActiveProvider("deepgram");
-        console.log("[STT:deepgram] Connected");
+        console.log("[STT] Connected via WebSocket proxy");
 
         const audioTracks = mediaStream.current!.getAudioTracks();
         if (audioTracks.length === 0) return;
@@ -142,13 +141,20 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
         // Skip during AI speech (echo prevention)
         if (isAISpeaking.current) return;
 
-        // UtteranceEnd — reliable turn-end signal
+        // UtteranceEnd — server detected speech ended. Don't fire immediately;
+        // instead reset the silence timer so the candidate still gets the full
+        // delay (4s) to continue speaking. This prevents premature AI triggers
+        // from Soniox's aggressive semantic endpointing (~1s).
         if (data.type === "UtteranceEnd") {
           if (finalBufferRef.current.trim() && !stoppedRef.current) {
             if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-            const full = finalBufferRef.current.trim();
-            finalBufferRef.current = "";
-            onCompleteRef.current(full);
+            silenceTimerRef.current = setTimeout(() => {
+              if (stoppedRef.current || isEnding.current) return;
+              const full = finalBufferRef.current.trim();
+              if (!full) return;
+              finalBufferRef.current = "";
+              onCompleteRef.current(full);
+            }, silenceDelayMs);
           }
           return;
         }
@@ -176,7 +182,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       dgSocket.onerror = () => console.error("[STT:deepgram] WebSocket error");
 
       dgSocket.onclose = (e) => {
-        console.log(`[STT:deepgram] Disconnected code=${e.code}`);
+        console.log(`[STT] WebSocket disconnected code=${e.code}`);
         setConnected(false);
         if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null; }
 
@@ -279,7 +285,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
     reconnectingRef.current = false;
     clearBuffer(); // #1: clear stale buffer on start
     const first = providers[0] || "deepgram";
-    console.log(`[STT] Starting with provider: ${first}`);
+    console.log(`[STT] Starting (transport=${first}, backend configured on server)`);
     if (first === "deepgram") startDeepgram();
     else startBrowser();
   }, [providers, startDeepgram, startBrowser, clearBuffer]);

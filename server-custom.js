@@ -76,55 +76,74 @@ function addWSProxy(server) {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws));
   });
 
-  // ─── Soniox response normalizer ─────────────────────────────────────
-  // Translates Soniox token-based responses to Deepgram-compatible format
-  // so the client code doesn't need to know which provider is being used.
-  function normalizeSoniox(raw) {
-    try {
-      const msg = typeof raw === "string" ? JSON.parse(raw) : raw;
-      if (msg.error_code) {
-        console.error(`[STT-WS:soniox] Error ${msg.error_code}: ${msg.error_message}`);
-        return null;
+  // ─── Soniox response normalizer (stateful per connection) ──────────
+  // Translates Soniox token-based responses to Deepgram-compatible format.
+  // Soniox finalizes tokens individually — a message can mix final + non-final.
+  // We track how many tokens have been sent as "final" and only emit new finals.
+  function createSonioxNormalizer() {
+    let lastFinalCount = 0; // how many tokens we've already emitted as final
+
+    return function normalize(raw) {
+      try {
+        const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+        if (msg.error_code) {
+          console.error(`[STT-WS:soniox] Error ${msg.error_code}: ${msg.error_message}`);
+          return [];
+        }
+        if (!msg.tokens || msg.tokens.length === 0) return [];
+
+        const results = [];
+        const realTokens = msg.tokens.filter(t => !t.text.startsWith("<"));
+        const hasEnd = msg.tokens.some(t => t.text === "<end>" && t.is_final);
+
+        // Count consecutive final tokens from the start
+        let finalCount = 0;
+        for (const t of realTokens) {
+          if (t.is_final) finalCount++;
+          else break;
+        }
+
+        // Emit NEW final tokens as is_final=true
+        if (finalCount > lastFinalCount) {
+          const newFinals = realTokens.slice(lastFinalCount, finalCount);
+          const text = newFinals.map(t => t.text).join("").trim();
+          if (text) {
+            results.push(JSON.stringify({
+              type: "Results",
+              is_final: true,
+              speech_final: false,
+              channel: { alternatives: [{ transcript: text, confidence: 0.95 }] },
+            }));
+          }
+          lastFinalCount = finalCount;
+        }
+
+        // Emit non-final tail as interim
+        const nonFinals = realTokens.slice(finalCount);
+        if (nonFinals.length > 0) {
+          const text = nonFinals.map(t => t.text).join("").trim();
+          if (text) {
+            results.push(JSON.stringify({
+              type: "Results",
+              is_final: false,
+              speech_final: false,
+              channel: { alternatives: [{ transcript: text, confidence: 0.8 }] },
+            }));
+          }
+        }
+
+        // <end> = utterance complete — reset state for next utterance
+        if (hasEnd) {
+          results.push(JSON.stringify({ type: "UtteranceEnd" }));
+          lastFinalCount = 0;
+        }
+
+        return results;
+      } catch (e) {
+        console.error("[STT-WS:soniox] Parse error:", e.message);
+        return [];
       }
-      if (!msg.tokens || msg.tokens.length === 0) return null;
-
-      // Check for <end> token (utterance end signal)
-      const hasEnd = msg.tokens.some(t => t.text === "<end>" && t.is_final);
-      if (hasEnd) {
-        return JSON.stringify({ type: "UtteranceEnd" });
-      }
-
-      // Build transcript from tokens (skip special tokens)
-      const realTokens = msg.tokens.filter(t => !t.text.startsWith("<"));
-      if (realTokens.length === 0) return null;
-
-      const transcript = realTokens.map(t => t.text).join("");
-      const isFinal = realTokens.every(t => t.is_final);
-      const avgConfidence = realTokens.reduce((s, t) => s + (t.confidence || 0), 0) / realTokens.length;
-
-      // Emit Deepgram-compatible Results format
-      return JSON.stringify({
-        type: "Results",
-        is_final: isFinal,
-        speech_final: isFinal && hasEnd,
-        channel: {
-          alternatives: [{
-            transcript: transcript.trim(),
-            confidence: avgConfidence,
-            words: realTokens.map(t => ({
-              word: t.text.trim(),
-              start: (t.start_ms || 0) / 1000,
-              end: (t.end_ms || 0) / 1000,
-              confidence: t.confidence || 0,
-              speaker: t.speaker !== undefined ? parseInt(t.speaker) : undefined,
-            })).filter(w => w.word),
-          }],
-        },
-      });
-    } catch (e) {
-      console.error("[STT-WS:soniox] Parse error:", e.message);
-      return null;
-    }
+    };
   }
 
   wss.on("connection", (clientWs) => {
@@ -190,12 +209,14 @@ function addWSProxy(server) {
       }
     });
 
+    const sonioxNormalize = cfg.provider === "soniox" ? createSonioxNormalizer() : null;
+
     upstream.on("message", (d, bin) => {
       if (clientWs.readyState !== WebSocket.OPEN) return;
-      if (cfg.provider === "soniox") {
-        // Normalize Soniox tokens → Deepgram-compatible format
-        const normalized = normalizeSoniox(bin ? d.toString() : d);
-        if (normalized) clientWs.send(normalized);
+      if (sonioxNormalize) {
+        // Normalize Soniox tokens → Deepgram-compatible format (stateful)
+        const messages = sonioxNormalize(bin ? d.toString() : d);
+        for (const m of messages) clientWs.send(m);
       } else {
         clientWs.send(bin ? d : d.toString());
       }
