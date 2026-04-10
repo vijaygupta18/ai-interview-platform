@@ -101,9 +101,11 @@ export async function POST(req: Request) {
           try { controller.close(); } catch {}
         };
         // AI fetch with retry — try twice with 35s timeout each
-        const makeAICall = async () => {
+        const startTime = Date.now();
+        const makeAICall = async (attempt: number) => {
           const abort = new AbortController();
           const timeout = setTimeout(() => abort.abort(), 35000);
+          console.log(`[Stream] AI call attempt ${attempt} for ${interviewId} (model=${process.env.AI_MODEL}, messages=${aiMessages.length})`);
           try {
             const res = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
               method: "POST",
@@ -122,9 +124,11 @@ export async function POST(req: Request) {
               signal: abort.signal,
             });
             clearTimeout(timeout);
+            console.log(`[Stream] AI call attempt ${attempt} responded in ${Date.now() - startTime}ms (status=${res.status})`);
             return res;
           } catch (err) {
             clearTimeout(timeout);
+            console.error(`[Stream] AI call attempt ${attempt} failed in ${Date.now() - startTime}ms:`, (err as Error).message);
             throw err;
           }
         };
@@ -132,13 +136,14 @@ export async function POST(req: Request) {
         try {
           let aiRes;
           try {
-            aiRes = await makeAICall();
+            aiRes = await makeAICall(1);
           } catch (firstErr) {
-            console.warn("[Stream] AI call failed, retrying:", (firstErr as Error).message);
-            aiRes = await makeAICall(); // retry once
+            console.warn(`[Stream] Retrying AI call for ${interviewId}...`);
+            aiRes = await makeAICall(2);
           }
 
           if (!aiRes.ok || !aiRes.body) {
+            console.error(`[Stream] AI returned ${aiRes.status} for ${interviewId}`);
             safeEnqueue(encoder.encode(`data: ${JSON.stringify({ error: "AI failed" })}\n\n`));
             safeClose();
             return;
@@ -215,7 +220,9 @@ export async function POST(req: Request) {
           if (buffer.trim()) processSentence(buffer.trim());
 
           // Wait for all parallel TTS to complete
+          console.log(`[Stream] AI done for ${interviewId} in ${Date.now() - startTime}ms (${sentenceIdx} sentences, waiting for TTS...)`);
           await Promise.all(ttsPromises);
+          console.log(`[Stream] TTS done for ${interviewId} in ${Date.now() - startTime}ms total`);
 
           // Check for [END_INTERVIEW] signal — AI decided to close
           const hasEndSignal = fullText.includes("[END_INTERVIEW]");
