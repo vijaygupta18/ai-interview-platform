@@ -56,6 +56,71 @@ function serverLog(level: "info" | "warn" | "error", message: string, interviewI
   }).catch(() => {});
 }
 
+// Format AI text: render tables, lists, and line breaks nicely
+function formatAIText(text: string) {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let tableRows: string[][] = [];
+  let listItems: string[] = [];
+
+  const flushTable = () => {
+    if (tableRows.length === 0) return;
+    elements.push(
+      <table key={`t${elements.length}`} className="my-2 text-xs border-collapse w-full">
+        <tbody>
+          {tableRows.map((cells, r) => (
+            <tr key={r} className={r === 0 ? "font-semibold text-blue-200" : ""}>
+              {cells.map((cell, c) => (
+                <td key={c} className="border border-white/10 px-2 py-1 text-blue-100/80">{cell.trim()}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+    tableRows = [];
+  };
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    elements.push(
+      <ul key={`l${elements.length}`} className="my-1.5 ml-4 space-y-0.5">
+        {listItems.map((item, j) => (
+          <li key={j} className="text-blue-100/90 list-disc">{item}</li>
+        ))}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushTable(); flushList();
+      elements.push(<br key={`br${elements.length}`} />);
+      continue;
+    }
+    // Table row: contains | separators
+    if (trimmed.includes("|") && trimmed.split("|").length >= 3) {
+      flushList();
+      const cells = trimmed.split("|").map(c => c.trim()).filter(c => c && !c.match(/^[-:]+$/));
+      if (cells.length > 0) tableRows.push(cells);
+      continue;
+    }
+    // List item: starts with - or •
+    if (trimmed.match(/^[-•]\s/)) {
+      flushTable();
+      listItems.push(trimmed.replace(/^[-•]\s*/, ""));
+      continue;
+    }
+    // Regular text
+    flushTable(); flushList();
+    elements.push(<p key={`p${elements.length}`} className="whitespace-pre-line">{trimmed}</p>);
+  }
+  flushTable(); flushList();
+  return <>{elements}</>;
+}
+
 export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Core state
   const [interviewData, setInterviewData] = useState<InterviewData | null>(null);
@@ -846,8 +911,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     if (videoTrack) {
       videoTrack.enabled = !videoTrack.enabled;
       setCameraEnabled(videoTrack.enabled);
+      if (!videoTrack.enabled) {
+        // Fire camera_off proctoring event directly (can't reference onProctoringEvent here due to declaration order)
+        fetch("/api/proctor-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ interviewId, type: "camera_off", severity: "flag", message: "Candidate turned off camera", token: tokenRef.current }),
+        }).catch(() => {});
+      }
     }
-  }, []);
+  }, [interviewId]);
 
   // Proctoring callback — handles alerts from Proctoring.tsx and local events (e.g. screen_share_stopped)
   const onProctoringEvent = useCallback(
@@ -860,6 +933,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         screen_share_stopped: 0.5,
         fullscreen_exit: 0.25,
         window_blur: 0.5,
+        camera_off: 1,
       };
       const weight = strikeWeights[event.type] || 0;
       if (weight > 0) {
@@ -1471,9 +1545,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                       ? "rounded-tl-sm bg-blue-600/20 text-blue-100"
                       : "rounded-tr-sm bg-zinc-700/50 text-zinc-200"
                   }`}>
-                    <p className={`text-sm leading-relaxed whitespace-pre-line ${entry.role === "ai" ? "tracking-wide" : ""}`}>
-                      {entry.text}
-                    </p>
+                    <div className="text-sm leading-relaxed">
+                      {entry.role === "ai" ? formatAIText(entry.text) : <p className="whitespace-pre-line">{entry.text}</p>}
+                    </div>
                     <span className="mt-1 block text-[10px] text-zinc-500">
                       {new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>

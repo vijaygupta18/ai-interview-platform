@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const hbRows = hbResult.rows;
     if (hbRows.length > 0 && hbRows[0].last_heartbeat_at) {
       const elapsed = Date.now() - new Date(hbRows[0].last_heartbeat_at).getTime();
-      if (elapsed > 45000) {
+      if (elapsed > 60000) {
         addProctoringEvent(interviewId, {
           type: "heartbeat_missing", severity: "flag",
           message: `No heartbeat for ${Math.round(elapsed / 1000)}s`,
