@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
     }
 
-    const MAX_STRIKES = parseInt(process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "20");
+    const MAX_STRIKES = parseInt(process.env.MAX_PROCTORING_STRIKES || process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "25");
     if (violations >= MAX_STRIKES) {
       return new Response(JSON.stringify({ error: "Interview terminated" }), { status: 403 });
     }
