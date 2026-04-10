@@ -859,7 +859,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         multiple_faces: 1,
         screen_share_stopped: 0.5,
         fullscreen_exit: 0.25,
-        window_blur: 0.25,
+        window_blur: 0.5,
       };
       const weight = strikeWeights[event.type] || 0;
       if (weight > 0) {
@@ -1471,7 +1471,9 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                       ? "rounded-tl-sm bg-blue-600/20 text-blue-100"
                       : "rounded-tr-sm bg-zinc-700/50 text-zinc-200"
                   }`}>
-                    <p className="text-sm leading-relaxed">{entry.text}</p>
+                    <p className={`text-sm leading-relaxed whitespace-pre-line ${entry.role === "ai" ? "tracking-wide" : ""}`}>
+                      {entry.text}
+                    </p>
                     <span className="mt-1 block text-[10px] text-zinc-500">
                       {new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>

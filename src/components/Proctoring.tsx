@@ -74,7 +74,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         devtools_open: 60000,
         phone_detected: 60000,
         fullscreen_exit: 30000,  // 30s — OS popups can kick fullscreen repeatedly
-        window_blur: 60000,      // 60s — very lenient, network freezes cause repeated blurs
+        window_blur: 30000,      // 30s cooldown
         virtual_camera: 300000,
       };
       const cooldown = cooldowns[type] || 5000;
@@ -141,15 +141,15 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (!blurStart) return;
       const duration = Date.now() - blurStart;
       blurStart = 0;
-      // Only flag sustained loss >8s — network freezes, OS popups, typing into chat can briefly blur
-      if (duration > 8000) {
+      // Flag sustained loss >5s
+      if (duration > 5000) {
         fireAlert(duration);
       } else {
-        // Short blur — track frequency. 5+ short blurs in 120s = suspicious (was 3 in 60s)
+        // Short blur — track frequency. 3+ short blurs in 60s = suspicious
         shortBlurCount++;
         if (shortBlurResetTimer) clearTimeout(shortBlurResetTimer);
-        shortBlurResetTimer = setTimeout(() => { shortBlurCount = 0; }, 120000);
-        if (shortBlurCount >= 5) {
+        shortBlurResetTimer = setTimeout(() => { shortBlurCount = 0; }, 60000);
+        if (shortBlurCount >= 3) {
           fireAlert(duration);
           shortBlurCount = 0;
         }
@@ -163,7 +163,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       } else if (blurStart) {
         const duration = Date.now() - blurStart;
         blurStart = 0;
-        if (duration > 8000) fireAlert(duration);
+        if (duration > 5000) fireAlert(duration);
       }
     };
 
