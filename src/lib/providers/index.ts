@@ -32,6 +32,16 @@ export function getSTTConfig(): STTConfig {
   const provider = process.env.STT_PROVIDER || "deepgram";
   const language = process.env.STT_LANGUAGE || "en-IN";
 
+  if (provider === "soniox") {
+    return {
+      provider: "soniox",
+      language,
+      wsUrl: "wss://stt-rt.soniox.com/transcribe-websocket",
+      headers: {},
+      params: { model: "stt-rt-v4" },
+    };
+  }
+
   if (provider === "sarvam") {
     const apiKey = process.env.SARVAM_API_KEY || "";
     return {

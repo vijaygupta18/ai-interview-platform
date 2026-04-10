@@ -32,6 +32,26 @@ const pool = new Pool({
 function getSTTConfig() {
   const provider = process.env.STT_PROVIDER || "deepgram";
   const language = process.env.STT_LANGUAGE || "en-IN";
+  if (provider === "soniox") {
+    const k = process.env.SONIOX_API_KEY || "";
+    // Soniox auth is sent as first JSON message after WS connect, not in URL/headers
+    return {
+      provider: "soniox",
+      wsUrl: "wss://stt-rt.soniox.com/transcribe-websocket",
+      // Config sent on connect — language_hints uses ISO 639-1 (en, hi, etc.)
+      initConfig: {
+        api_key: k,
+        model: "stt-rt-v4",
+        audio_format: "auto", // auto-detects webm/opus from MediaRecorder
+        num_channels: 1,
+        language_hints: [language.split("-")[0]], // "en-IN" → "en"
+        language_hints_strict: false,
+        enable_endpoint_detection: true,
+        max_endpoint_delay_ms: 4000, // matches our 4s silence preference
+        enable_speaker_diarization: true,
+      },
+    };
+  }
   if (provider === "sarvam") {
     const k = process.env.SARVAM_API_KEY || "";
     return { provider: "sarvam", wsUrl: `wss://api.sarvam.ai/speech-to-text-streaming/transcribe/ws?api_subscription_key=${k}&language_code=${language}&model=saaras:v3`, headers: { "Api-Subscription-Key": k } };
@@ -56,13 +76,71 @@ function addWSProxy(server) {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws));
   });
 
+  // ─── Soniox response normalizer ─────────────────────────────────────
+  // Translates Soniox token-based responses to Deepgram-compatible format
+  // so the client code doesn't need to know which provider is being used.
+  function normalizeSoniox(raw) {
+    try {
+      const msg = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (msg.error_code) {
+        console.error(`[STT-WS:soniox] Error ${msg.error_code}: ${msg.error_message}`);
+        return null;
+      }
+      if (!msg.tokens || msg.tokens.length === 0) return null;
+
+      // Check for <end> token (utterance end signal)
+      const hasEnd = msg.tokens.some(t => t.text === "<end>" && t.is_final);
+      if (hasEnd) {
+        return JSON.stringify({ type: "UtteranceEnd" });
+      }
+
+      // Build transcript from tokens (skip special tokens)
+      const realTokens = msg.tokens.filter(t => !t.text.startsWith("<"));
+      if (realTokens.length === 0) return null;
+
+      const transcript = realTokens.map(t => t.text).join("");
+      const isFinal = realTokens.every(t => t.is_final);
+      const avgConfidence = realTokens.reduce((s, t) => s + (t.confidence || 0), 0) / realTokens.length;
+
+      // Emit Deepgram-compatible Results format
+      return JSON.stringify({
+        type: "Results",
+        is_final: isFinal,
+        speech_final: isFinal && hasEnd,
+        channel: {
+          alternatives: [{
+            transcript: transcript.trim(),
+            confidence: avgConfidence,
+            words: realTokens.map(t => ({
+              word: t.text.trim(),
+              start: (t.start_ms || 0) / 1000,
+              end: (t.end_ms || 0) / 1000,
+              confidence: t.confidence || 0,
+              speaker: t.speaker !== undefined ? parseInt(t.speaker) : undefined,
+            })).filter(w => w.word),
+          }],
+        },
+      });
+    } catch (e) {
+      console.error("[STT-WS:soniox] Parse error:", e.message);
+      return null;
+    }
+  }
+
   wss.on("connection", (clientWs) => {
     const cfg = getSTTConfig();
     console.log(`[STT-WS] Proxying to ${cfg.provider}`);
 
     let upstream;
     try {
-      upstream = cfg.protocols ? new WebSocket(cfg.wsUrl, cfg.protocols) : new WebSocket(cfg.wsUrl, { headers: cfg.headers });
+      if (cfg.protocols) {
+        upstream = new WebSocket(cfg.wsUrl, cfg.protocols);
+      } else if (cfg.headers) {
+        upstream = new WebSocket(cfg.wsUrl, { headers: cfg.headers });
+      } else {
+        // Soniox and others: plain WebSocket, auth in first message
+        upstream = new WebSocket(cfg.wsUrl);
+      }
     } catch (e) { clientWs.close(1011, "STT error"); return; }
 
     upstream.on("unexpected-response", (_, res) => {
@@ -73,20 +151,54 @@ function addWSProxy(server) {
     const buf = []; let ready = false;
     upstream.on("open", () => {
       ready = true; console.log(`[STT-WS] Connected to ${cfg.provider}`);
+      // Soniox: send config JSON as first message
+      if (cfg.initConfig) {
+        upstream.send(JSON.stringify(cfg.initConfig));
+        console.log(`[STT-WS:soniox] Sent init config (model=${cfg.initConfig.model}, lang=${cfg.initConfig.language_hints})`);
+      }
       if (buf.length) { buf.forEach(c => upstream.send(c.isBinary ? c.data : c.data.toString())); buf.length = 0; }
     });
 
-    // #10: buffer text frames too (CloseStream could arrive before upstream ready)
     clientWs.on("message", (d, isBinary) => {
       if (ready && upstream.readyState === WebSocket.OPEN) {
-        // CRITICAL: preserve text/binary framing — text (KeepAlive) as text, audio as binary
-        upstream.send(isBinary ? d : d.toString());
+        if (isBinary) {
+          // Audio data — forward as-is
+          upstream.send(d);
+        } else {
+          // Text frame from client (KeepAlive, CloseStream, etc.)
+          const text = d.toString();
+          if (cfg.provider === "soniox") {
+            // Translate client keepalive/close to Soniox format
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed.type === "KeepAlive") {
+                upstream.send(JSON.stringify({ type: "keepalive" }));
+              } else if (parsed.type === "CloseStream") {
+                upstream.send(""); // Soniox: empty string = end of audio
+              } else {
+                upstream.send(text);
+              }
+            } catch {
+              upstream.send(text);
+            }
+          } else {
+            upstream.send(text);
+          }
+        }
       } else if (buf.length < 20) {
         buf.push({ data: d, isBinary });
       }
     });
+
     upstream.on("message", (d, bin) => {
-      if (clientWs.readyState === WebSocket.OPEN) clientWs.send(bin ? d : d.toString());
+      if (clientWs.readyState !== WebSocket.OPEN) return;
+      if (cfg.provider === "soniox") {
+        // Normalize Soniox tokens → Deepgram-compatible format
+        const normalized = normalizeSoniox(bin ? d.toString() : d);
+        if (normalized) clientWs.send(normalized);
+      } else {
+        clientWs.send(bin ? d : d.toString());
+      }
     });
 
     const ping = setInterval(() => {
@@ -94,12 +206,12 @@ function addWSProxy(server) {
       if (upstream?.readyState === WebSocket.OPEN) {
         upstream.ping();
         if (cfg.provider === "deepgram") upstream.send(JSON.stringify({ type: "KeepAlive" }));
+        if (cfg.provider === "soniox") upstream.send(JSON.stringify({ type: "keepalive" }));
       }
     }, 5000);
 
     const cleanup = () => { clearInterval(ping); };
     clientWs.on("close", () => { cleanup(); if (upstream.readyState <= 1) upstream.terminate(); });
-    // #11: clear ping on upstream error too
     upstream.on("close", () => { cleanup(); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(); });
     clientWs.on("error", e => console.error("[STT-WS]", e.message));
     upstream.on("error", e => { cleanup(); console.error("[STT-WS]", e.message); if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011); });
