@@ -12,7 +12,7 @@ export async function GET() {
     // STT
     sttProviders: (process.env.STT_CLIENT_PROVIDERS || "deepgram,browser").split(",").map(s => s.trim()),
     sttBackend: process.env.STT_PROVIDER || "deepgram",
-    silenceDelayMs: parseInt(process.env.SILENCE_DELAY_MS || "4000"),
+    silenceDelayMs: parseInt(process.env.SILENCE_DELAY_MS || "3000"),
 
     // App
     appUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "",

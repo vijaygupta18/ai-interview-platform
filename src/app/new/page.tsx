@@ -261,7 +261,7 @@ export default function NewInterviewPage() {
                   >
                     Copy All Links
                   </button>
-                  <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setCandidates([{email:"",name:"",phone:""}]); setAdditionalContext(""); }}
+                  <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setCandidates([{email:"",name:"",phone:""}]); setAdditionalContext(""); setSelectedBankId(""); setSelectedTemplateId(""); }}
                     className="btn-primary flex-1">
                     Create More
                   </button>
@@ -298,7 +298,7 @@ export default function NewInterviewPage() {
               <p className="text-xs text-gray-400 text-center">No email template was selected — share the link manually.</p>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setCandidates([{email:"",name:"",phone:""}]); setAdditionalContext(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
+              <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setCandidates([{email:"",name:"",phone:""}]); setAdditionalContext(""); setSelectedBankId(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
                 Create Another
               </button>
               <button

@@ -65,15 +65,16 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
   const alert = useCallback(
     (type: string, severity: string, message: string) => {
       const now = Date.now();
+      // Cooldowns tuned for Indian conditions — longer gaps between repeated alerts
       const cooldowns: Record<string, number> = {
         second_monitor: 300000,
-        multiple_faces: 15000,
-        face_missing: 15000,
-        eye_away: 15000,
+        multiple_faces: 30000,   // 30s — family walking behind shouldn't spam
+        face_missing: 30000,     // 30s — bad lighting triggers this constantly
+        eye_away: 30000,
         devtools_open: 60000,
-        phone_detected: 30000,
-        fullscreen_exit: 10000,
-        window_blur: 30000, // 30s — be lenient, candidates may briefly switch contexts
+        phone_detected: 60000,
+        fullscreen_exit: 30000,  // 30s — OS popups can kick fullscreen repeatedly
+        window_blur: 60000,      // 60s — very lenient, network freezes cause repeated blurs
         virtual_camera: 300000,
       };
       const cooldown = cooldowns[type] || 5000;
@@ -140,8 +141,8 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (!blurStart) return;
       const duration = Date.now() - blurStart;
       blurStart = 0;
-      // Only flag sustained loss >5s (was 2s) — typing into chat may briefly blur the window
-      if (duration > 5000) {
+      // Only flag sustained loss >8s — network freezes, OS popups, typing into chat can briefly blur
+      if (duration > 8000) {
         fireAlert(duration);
       } else {
         // Short blur — track frequency. 5+ short blurs in 120s = suspicious (was 3 in 60s)
@@ -162,7 +163,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       } else if (blurStart) {
         const duration = Date.now() - blurStart;
         blurStart = 0;
-        if (duration > 5000) fireAlert(duration);
+        if (duration > 8000) fireAlert(duration);
       }
     };
 
@@ -328,54 +329,60 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       }
     })();
 
+    // Require CONSECUTIVE misses before alerting — single frame with bad lighting shouldn't count
+    let consecutiveFaceMissing = 0;
+    let consecutiveMultipleFaces = 0;
+
     const detect = async () => {
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0) return;
 
       let faceCount = -1;
-      let faceCenterX: number | null = null;
 
       // Try MediaPipe first, then Chrome native
       if (mediaPipeDetectorRef.current) {
         try {
           const result = mediaPipeDetectorRef.current.detect(video);
           faceCount = result.detections.length;
-          if (faceCount === 1) {
-            const box = result.detections[0].boundingBox;
-            faceCenterX = box.originX + box.width / 2;
-          }
         } catch {}
       } else if (nativeFaceDetectorRef.current) {
         try {
           const faces = await nativeFaceDetectorRef.current.detect(video);
           faceCount = faces.length;
-          if (faceCount === 1) {
-            faceCenterX = faces[0].boundingBox.x + faces[0].boundingBox.width / 2;
-          }
         } catch {}
       }
 
       if (faceCount === -1 && !detectionFailedRef.current) {
         detectionFailedRef.current = true;
         console.error("[Proctoring] No face detector available — face detection disabled");
-        // Don't alert as a strike — it's a system issue, not candidate's fault
-        // But log it for the interviewer
         sendProctoringEvent(interviewId, "detection_unavailable", "info", "Face detection unavailable on this browser", token);
       }
 
       if (faceCount === 0) {
-        alert("face_missing", "flag", "No face detected — please face the camera");
-      } else if (faceCount > 1) {
-        alert("multiple_faces", "flag", `${faceCount} faces detected`);
-      } else if (faceCount === 1 && faceCenterX !== null) {
-        const offset = Math.abs(faceCenterX - video.videoWidth / 2);
-        if (offset > video.videoWidth * 0.25) {
-          alert("eye_away", "flag", "Candidate appears to be looking away");
+        consecutiveFaceMissing++;
+        consecutiveMultipleFaces = 0;
+        // Only alert after 3 consecutive misses (~18s) — handles bad lighting, sneezing, leaning
+        if (consecutiveFaceMissing >= 3) {
+          alert("face_missing", "flag", "No face detected — please face the camera");
+          consecutiveFaceMissing = 0;
         }
+      } else if (faceCount > 1) {
+        consecutiveMultipleFaces++;
+        consecutiveFaceMissing = 0;
+        // Only alert after 2 consecutive detections (~12s) — handles family walking behind briefly
+        if (consecutiveMultipleFaces >= 2) {
+          alert("multiple_faces", "flag", `${faceCount} faces detected`);
+          consecutiveMultipleFaces = 0;
+        }
+      } else {
+        // Face detected normally — reset counters
+        consecutiveFaceMissing = 0;
+        consecutiveMultipleFaces = 0;
       }
+      // eye_away detection removed from strike counting — still fires but weight=0
     };
 
-    const interval = setInterval(detect, 4000);
+    const interval = setInterval(detect, 6000); // 6s interval (was 4s) — less CPU, fewer false positives
     return () => {
       cancelled = true;
       clearInterval(interval);

@@ -44,6 +44,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
 
   const onInterimRef = useRef(onInterim);
   const onCompleteRef = useRef(onComplete);
+  const startBrowserRef = useRef<() => boolean | undefined>();
   onInterimRef.current = onInterim;
   onCompleteRef.current = onComplete;
 
@@ -196,9 +197,8 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
             if (!stoppedRef.current) startDeepgram();
           }, delay);
         } else if (reconnectCountRef.current >= 5) {
-          // #8: startBrowser in deps
           console.warn("[STT:deepgram] Max retries — falling back to browser");
-          startBrowser();
+          startBrowserRef.current?.();
         }
       };
 
@@ -276,6 +276,7 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       return false;
     }
   }, [isAISpeaking, isEnding, handleFinalText, handleInterimText]);
+  startBrowserRef.current = startBrowser;
 
   // ─── Public API ───────────────────────────────────────────────────────
 

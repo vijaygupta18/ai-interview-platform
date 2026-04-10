@@ -11,20 +11,29 @@ export class SarvamTTS implements TTSProvider {
     // Sarvam has 500 char limit per input — split into chunks by sentence
     const chunks = this.splitText(text, 490);
 
-    const res = await fetch("https://api.sarvam.ai/text-to-speech", {
-      method: "POST",
-      headers: {
-        "api-subscription-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        inputs: chunks,
-        target_language_code: process.env.SARVAM_LANGUAGE || "en-IN",
-        speaker: process.env.SARVAM_SPEAKER || "priya",
-        model: "bulbul:v3",
-        pace: parseFloat(process.env.SARVAM_PACE || "1.2"),
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let res: Response;
+    try {
+      res = await fetch("https://api.sarvam.ai/text-to-speech", {
+        method: "POST",
+        headers: {
+          "api-subscription-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inputs: chunks,
+          target_language_code: process.env.SARVAM_LANGUAGE || "en-IN",
+          speaker: process.env.SARVAM_SPEAKER || "priya",
+          model: "bulbul:v3",
+          pace: parseFloat(process.env.SARVAM_PACE || "1.2"),
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) throw new Error(`Sarvam TTS error: ${res.status}`);
     const data = await res.json();

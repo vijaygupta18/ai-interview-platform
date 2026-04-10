@@ -47,8 +47,9 @@ function getSTTConfig() {
         language_hints: [language.split("-")[0]], // "en-IN" → "en"
         language_hints_strict: false,
         enable_endpoint_detection: true,
-        max_endpoint_delay_ms: 4000, // matches our 4s silence preference
-        enable_speaker_diarization: true,
+        max_endpoint_delay_ms: 3000,
+        // NOTE: diarization DISABLED — it prevents <end> tokens from being sent
+        // enable_speaker_diarization: true,
       },
     };
   }
@@ -77,11 +78,11 @@ function addWSProxy(server) {
   });
 
   // ─── Soniox response normalizer (stateful per connection) ──────────
-  // Translates Soniox token-based responses to Deepgram-compatible format.
-  // Soniox finalizes tokens individually — a message can mix final + non-final.
-  // We track how many tokens have been sent as "final" and only emit new finals.
+  // Soniox uses a sliding window of tokens — old finals get dropped.
+  // Simple approach: emit ALL text as interim on each message, then on
+  // <end> event emit the full utterance as is_final=true + UtteranceEnd.
   function createSonioxNormalizer() {
-    let lastFinalCount = 0; // how many tokens we've already emitted as final
+    let utteranceText = ""; // accumulates the full utterance across messages
 
     return function normalize(raw) {
       try {
@@ -94,48 +95,33 @@ function addWSProxy(server) {
 
         const results = [];
         const realTokens = msg.tokens.filter(t => !t.text.startsWith("<"));
-        const hasEnd = msg.tokens.some(t => t.text === "<end>" && t.is_final);
+        const hasEnd = msg.tokens.some(t => t.text === "<end>");
+        // Build full text from all tokens in this message (Soniox sends the complete
+        // current state — finals + non-finals — as a sliding window)
+        const fullText = realTokens.map(t => t.text).join("").trim();
 
-        // Count consecutive final tokens from the start
-        let finalCount = 0;
-        for (const t of realTokens) {
-          if (t.is_final) finalCount++;
-          else break;
-        }
-
-        // Emit NEW final tokens as is_final=true
-        if (finalCount > lastFinalCount) {
-          const newFinals = realTokens.slice(lastFinalCount, finalCount);
-          const text = newFinals.map(t => t.text).join("").trim();
-          if (text) {
+        if (hasEnd) {
+          // Utterance complete — emit the final text as is_final=true
+          const finalText = (utteranceText + " " + fullText).trim() || fullText;
+          if (finalText) {
             results.push(JSON.stringify({
               type: "Results",
               is_final: true,
-              speech_final: false,
-              channel: { alternatives: [{ transcript: text, confidence: 0.95 }] },
+              speech_final: true,
+              channel: { alternatives: [{ transcript: finalText, confidence: 0.95 }] },
             }));
           }
-          lastFinalCount = finalCount;
-        }
-
-        // Emit non-final tail as interim
-        const nonFinals = realTokens.slice(finalCount);
-        if (nonFinals.length > 0) {
-          const text = nonFinals.map(t => t.text).join("").trim();
-          if (text) {
-            results.push(JSON.stringify({
-              type: "Results",
-              is_final: false,
-              speech_final: false,
-              channel: { alternatives: [{ transcript: text, confidence: 0.8 }] },
-            }));
-          }
-        }
-
-        // <end> = utterance complete — reset state for next utterance
-        if (hasEnd) {
           results.push(JSON.stringify({ type: "UtteranceEnd" }));
-          lastFinalCount = 0;
+          utteranceText = "";
+        } else if (fullText) {
+          // Still speaking — emit as interim for live preview
+          utteranceText = fullText; // track latest complete text
+          results.push(JSON.stringify({
+            type: "Results",
+            is_final: false,
+            speech_final: false,
+            channel: { alternatives: [{ transcript: fullText, confidence: 0.8 }] },
+          }));
         }
 
         return results;
@@ -214,8 +200,8 @@ function addWSProxy(server) {
     upstream.on("message", (d, bin) => {
       if (clientWs.readyState !== WebSocket.OPEN) return;
       if (sonioxNormalize) {
-        // Normalize Soniox tokens → Deepgram-compatible format (stateful)
-        const messages = sonioxNormalize(bin ? d.toString() : d);
+        const rawStr = typeof d === "string" ? d : d.toString();
+        const messages = sonioxNormalize(rawStr);
         for (const m of messages) clientWs.send(m);
       } else {
         clientWs.send(bin ? d : d.toString());

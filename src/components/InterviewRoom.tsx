@@ -696,7 +696,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const sendChatMessage = useCallback(() => {
     const text = chatInput.trim();
     if (!text) return;
-    if (isProcessingRef.current || isAISpeakingRef.current || isAIThinking) return;
+    if (isProcessingRef.current || isAIThinking) return; // allow typing while AI speaks
     setChatInput("");
     setInterimTranscript("");
     lastActivityRef.current = Date.now();
@@ -877,21 +877,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }).catch(() => {});
       }
 
-      // Only 5 checks active — catches real cheating, tolerant of bad lighting/cameras
+      // Tuned for Indian conditions: bad lighting, low-quality cameras, slow internet,
+      // shared spaces (family walking behind), OS popups, network-caused page freezes.
+      // All weights intentionally low — we log everything to DB for interviewer review,
+      // but only terminate for sustained, repeated patterns.
       const strikeWeights: Record<string, number> = {
-        face_missing: 0.5,       // bad camera/lighting can trigger — keep low
-        multiple_faces: 1,       // someone else helping — real signal
-        screen_share_stopped: 1, // deliberately hiding screen — real signal
-        fullscreen_exit: 0.5,    // already has 30s re-enter prompt, don't double-punish
-        window_blur: 0.5,        // notifications, clock glances — noisy
-        // DISABLED — too many false positives for interview practice:
-        // eye_away: fires when typing in chat, looking at keyboard, thinking
-        // phone_detected: desk lamps, mugs, monitor reflections trigger it
-        // second_monitor: developers legitimately use dual monitors
-        // devtools_open: unreliable detection, varies by screen/dock mode
-        // virtual_camera: too niche
-        // heartbeat_missing: network blip = false strike
-        // multiple_voices: only works with Deepgram diarization
+        face_missing: 0.25,      // bad lighting/cheap webcam triggers this constantly — 4 misses = 1 strike
+        multiple_faces: 0.5,     // shared rooms, family walking behind — only flag if persistent
+        screen_share_stopped: 0.5, // slow internet can drop screen share — not always intentional
+        fullscreen_exit: 0.25,   // OS popups, antivirus alerts, browser notifications kick fullscreen — has re-enter prompt already
+        window_blur: 0.25,       // network freeze, OS notifications, Windows updates — very common in India
       };
       const effectiveSeverity = event.severity || "flag";
       const weight = strikeWeights[event.type] || 0;
@@ -919,6 +914,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       stt.stop();
       if (timerRef.current) clearInterval(timerRef.current);
       if (activeAbortRef.current) { activeAbortRef.current.abort(); activeAbortRef.current = null; }
+      if (activeReaderRef.current) { try { activeReaderRef.current.cancel(); } catch {} activeReaderRef.current = null; }
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
       fetch(`/api/interview/${interviewId}/end`, {
         method: "POST",
@@ -1524,12 +1520,12 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                     }
                   }}
                   placeholder={isAISpeaking ? "AI is speaking..." : isAIThinking ? "AI is thinking..." : "Type a message or use voice..."}
-                  disabled={isAISpeaking || isAIThinking}
+                  disabled={isAIThinking}
                   className="flex-1 rounded-lg bg-zinc-800/60 border border-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 focus:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={sendChatMessage}
-                  disabled={!chatInput.trim() || isAISpeaking || isAIThinking}
+                  disabled={!chatInput.trim() || isAIThinking}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
                   title="Send (Enter)"
                 >

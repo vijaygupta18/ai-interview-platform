@@ -9,7 +9,17 @@ import { validateAccess } from "@/lib/auth-check";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const { authorized } = await validateAccess(req, id);
+  // Try session-based auth first, then token from body
+  let { authorized } = await validateAccess(req, id);
+  if (!authorized) {
+    try {
+      const body = await req.json().catch(() => ({} as any));
+      if (body?.token) {
+        const { validateAccessPost } = await import("@/lib/auth-check");
+        authorized = await validateAccessPost(id, body.token);
+      }
+    } catch {}
+  }
   if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
