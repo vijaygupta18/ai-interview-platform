@@ -40,7 +40,7 @@ function SectionHeader({ step, title, subtitle }: { step: number; title: string;
 
 export default function NewInterviewPage() {
   const { data: session } = useSession();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(""); // supports multiple: comma or newline separated
   const [candidateName, setCandidateName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("");
@@ -53,7 +53,8 @@ export default function NewInterviewPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [interviewLink, setInterviewLink] = useState("");
+  const [interviewLink, setInterviewLink] = useState(""); // single link (backward compat)
+  const [bulkResults, setBulkResults] = useState<{ email: string; link: string; error?: string }[]>([]);
   const [copied, setCopied] = useState(false);
   const [questionBanks, setQuestionBanks] = useState<QuestionBank[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<string>("");
@@ -93,38 +94,82 @@ export default function NewInterviewPage() {
     }
   }, []);
 
+  // Parse emails: comma, semicolon, or newline separated
+  const parseEmails = (raw: string) =>
+    raw.split(/[,;\n]+/).map(e => e.trim()).filter(e => e && e.includes("@"));
+
+  const emails = parseEmails(email);
   const hasContext = file || additionalContext.trim().length > 0 || selectedBankId;
-  const canSubmit = role && email && hasContext && !submitting;
+  const canSubmit = role && emails.length > 0 && hasContext && !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
 
     setSubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append("candidateEmail", email);
-      if (candidateName.trim()) formData.append("candidateName", candidateName.trim());
-      if (phone.trim()) formData.append("candidatePhone", phone.trim());
-      formData.append("role", role);
-      formData.append("level", level);
-      formData.append("duration", String(duration));
-      formData.append("focusAreas", focusAreas.join(","));
-      formData.append("roundType", roundType);
-      if (roundType === "Coding") formData.append("language", codingLanguage);
-      if (selectedBankId) formData.append("questionBankId", selectedBankId);
-      if (additionalContext.trim()) formData.append("additionalContext", additionalContext.trim());
-      if (selectedTemplateId) formData.append("emailTemplateId", selectedTemplateId);
-      if (file) formData.append("resume", file);
+    setBulkResults([]);
 
-      const res = await fetch("/api/create-interview", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) { alert(`Error: ${data.error || "Failed"}`); return; }
-      if (data.id) {
-        const link = data.token
-          ? `${window.location.origin}/interview/${data.id}?token=${data.token}`
-          : `${window.location.origin}/interview/${data.id}`;
-        setInterviewLink(link);
+    try {
+      if (emails.length === 1) {
+        // Single candidate — original flow
+        const formData = new FormData();
+        formData.append("candidateEmail", emails[0]);
+        if (candidateName.trim()) formData.append("candidateName", candidateName.trim());
+        if (phone.trim()) formData.append("candidatePhone", phone.trim());
+        formData.append("role", role);
+        formData.append("level", level);
+        formData.append("duration", String(duration));
+        formData.append("focusAreas", focusAreas.join(","));
+        formData.append("roundType", roundType);
+        if (roundType === "Coding") formData.append("language", codingLanguage);
+        if (selectedBankId) formData.append("questionBankId", selectedBankId);
+        if (additionalContext.trim()) formData.append("additionalContext", additionalContext.trim());
+        if (selectedTemplateId) formData.append("emailTemplateId", selectedTemplateId);
+        if (file) formData.append("resume", file);
+
+        const res = await fetch("/api/create-interview", { method: "POST", body: formData });
+        const data = await res.json();
+        if (!res.ok) { alert(`Error: ${data.error || "Failed"}`); return; }
+        if (data.id) {
+          const link = data.token
+            ? `${window.location.origin}/interview/${data.id}?token=${data.token}`
+            : `${window.location.origin}/interview/${data.id}`;
+          setInterviewLink(link);
+        }
+      } else {
+        // Bulk — create one interview per email with the same settings
+        const results: { email: string; link: string; error?: string }[] = [];
+        for (const candidateEmail of emails) {
+          try {
+            const formData = new FormData();
+            formData.append("candidateEmail", candidateEmail);
+            formData.append("role", role);
+            formData.append("level", level);
+            formData.append("duration", String(duration));
+            formData.append("focusAreas", focusAreas.join(","));
+            formData.append("roundType", roundType);
+            if (roundType === "Coding") formData.append("language", codingLanguage);
+            if (selectedBankId) formData.append("questionBankId", selectedBankId);
+            if (additionalContext.trim()) formData.append("additionalContext", additionalContext.trim());
+            if (selectedTemplateId) formData.append("emailTemplateId", selectedTemplateId);
+            if (file) formData.append("resume", file);
+
+            const res = await fetch("/api/create-interview", { method: "POST", body: formData });
+            const data = await res.json();
+            if (res.ok && data.id) {
+              const link = data.token
+                ? `${window.location.origin}/interview/${data.id}?token=${data.token}`
+                : `${window.location.origin}/interview/${data.id}`;
+              results.push({ email: candidateEmail, link });
+            } else {
+              results.push({ email: candidateEmail, link: "", error: data.error || "Failed" });
+            }
+          } catch {
+            results.push({ email: candidateEmail, link: "", error: "Request failed" });
+          }
+        }
+        setBulkResults(results);
+        setInterviewLink("__bulk__"); // trigger success screen
       }
     } catch (err) {
       console.error("Create interview failed:", err);
@@ -170,6 +215,60 @@ export default function NewInterviewPage() {
                 />
               ))}
             </div>
+
+            {/* Bulk results */}
+            {bulkResults.length > 0 ? (
+              <div className="relative text-left space-y-4">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-green-50 flex items-center justify-center mb-3">
+                    <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {bulkResults.filter(r => r.link).length} of {bulkResults.length} Interviews Created
+                  </h2>
+                  {selectedTemplateId && (
+                    <p className="text-sm text-gray-500 mt-1">Email invitations sent to each candidate</p>
+                  )}
+                </div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {bulkResults.map((r, i) => (
+                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${r.error ? "bg-red-50" : "bg-gray-50"}`}>
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${r.error ? "bg-red-500" : "bg-green-500"}`} />
+                      <span className="text-sm text-gray-700 truncate flex-1">{r.email}</span>
+                      {r.error ? (
+                        <span className="text-xs text-red-500">{r.error}</span>
+                      ) : (
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(r.link); }}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 shrink-0"
+                        >
+                          Copy Link
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      const links = bulkResults.filter(r => r.link).map(r => `${r.email}: ${r.link}`).join("\n");
+                      navigator.clipboard.writeText(links);
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    Copy All Links
+                  </button>
+                  <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setEmail(""); setCandidateName(""); setAdditionalContext(""); }}
+                    className="btn-primary flex-1">
+                    Create More
+                  </button>
+                </div>
+              </div>
+            ) : (
+            /* Single result */
+            <>
             <div className="relative">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-green-50 flex items-center justify-center">
                 <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -198,7 +297,7 @@ export default function NewInterviewPage() {
               <p className="text-xs text-gray-400 text-center">No email template was selected — share the link manually.</p>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setInterviewLink(""); setFile(null); setRole(""); setEmail(""); setCandidateName(""); setAdditionalContext(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
+              <button onClick={() => { setInterviewLink(""); setBulkResults([]); setFile(null); setRole(""); setEmail(""); setCandidateName(""); setAdditionalContext(""); setSelectedTemplateId(""); }} className="btn-primary flex-1">
                 Create Another
               </button>
               <button
@@ -208,6 +307,8 @@ export default function NewInterviewPage() {
                 Open in Mail App
               </button>
             </div>
+            </>
+            )}
           </div>
         ) : (
           /* ── Form ───────────────────────────────────────────────── */
@@ -219,9 +320,14 @@ export default function NewInterviewPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="label">Candidate Email <span className="text-red-400">*</span></label>
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                      placeholder="candidate@example.com" className="input-field" />
+                    <label className="label">
+                      Candidate Email{emails.length > 1 ? "s" : ""} <span className="text-red-400">*</span>
+                      {emails.length > 1 && <span className="text-indigo-500 font-normal ml-1">({emails.length} candidates)</span>}
+                    </label>
+                    <textarea required value={email} onChange={(e) => setEmail(e.target.value)}
+                      placeholder={"candidate@example.com\n\nFor bulk: paste multiple emails\n(comma, semicolon, or one per line)"}
+                      rows={emails.length > 1 ? 3 : 1}
+                      className="input-field resize-none" />
                   </div>
                   <div>
                     <label className="label">Candidate Name <span className="text-gray-400 font-normal">(optional)</span></label>
@@ -445,10 +551,10 @@ export default function NewInterviewPage() {
                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
                       <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
                     </svg>
-                    Creating Interview...
+                    {emails.length > 1 ? `Creating ${emails.length} Interviews...` : "Creating Interview..."}
                   </span>
                 ) : (
-                  "Create Interview"
+                  emails.length > 1 ? `Create ${emails.length} Interviews` : "Create Interview"
                 )}
               </button>
               {!hasContext && (
