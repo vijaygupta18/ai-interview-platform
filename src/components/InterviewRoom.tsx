@@ -852,13 +852,25 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   // Proctoring callback — handles alerts from Proctoring.tsx and local events (e.g. screen_share_stopped)
   const onProctoringEvent = useCallback(
     (event: { type: string; message: string; severity?: string }) => {
-      const alert: ProctoringAlert = {
-        id: crypto.randomUUID(),
-        type: event.type,
-        message: event.message,
-        timestamp: Date.now(),
+      // Only show toast for events that count as strikes — disabled checks are silent
+      // (they still log to DB for interviewer review, just no candidate-facing toast)
+      const strikeWeights: Record<string, number> = {
+        face_missing: 0.25,
+        multiple_faces: 0.5,
+        screen_share_stopped: 0.5,
+        fullscreen_exit: 0.25,
+        window_blur: 0.25,
       };
-      setProctoringAlerts((prev) => [...prev, alert]);
+      const weight = strikeWeights[event.type] || 0;
+      if (weight > 0) {
+        const alert: ProctoringAlert = {
+          id: crypto.randomUUID(),
+          type: event.type,
+          message: event.message,
+          timestamp: Date.now(),
+        };
+        setProctoringAlerts((prev) => [...prev, alert]);
+      }
 
       // For events not originating from Proctoring.tsx (e.g. screen_share_stopped),
       // persist to server so they appear in DB and getProctoringViolationCount
@@ -877,19 +889,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }).catch(() => {});
       }
 
-      // Tuned for Indian conditions: bad lighting, low-quality cameras, slow internet,
-      // shared spaces (family walking behind), OS popups, network-caused page freezes.
-      // All weights intentionally low — we log everything to DB for interviewer review,
-      // but only terminate for sustained, repeated patterns.
-      const strikeWeights: Record<string, number> = {
-        face_missing: 0.25,      // bad lighting/cheap webcam triggers this constantly — 4 misses = 1 strike
-        multiple_faces: 0.5,     // shared rooms, family walking behind — only flag if persistent
-        screen_share_stopped: 0.5, // slow internet can drop screen share — not always intentional
-        fullscreen_exit: 0.25,   // OS popups, antivirus alerts, browser notifications kick fullscreen — has re-enter prompt already
-        window_blur: 0.25,       // network freeze, OS notifications, Windows updates — very common in India
-      };
       const effectiveSeverity = event.severity || "flag";
-      const weight = strikeWeights[event.type] || 0;
       if (weight > 0 && effectiveSeverity === "flag") {
         setProctoringWarnings((prev) => {
           const next = prev + weight;
