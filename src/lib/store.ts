@@ -293,6 +293,13 @@ export async function getInterviewByToken(token: string): Promise<Interview | nu
 }
 
 export async function addTranscriptEntry(id: string, entry: TranscriptEntry): Promise<void> {
+  // Deduplicate: skip if the last entry for this interview has the same role+text
+  const { rows } = await pool.query(
+    "SELECT text FROM transcript_entries WHERE interview_id = $1 ORDER BY id DESC LIMIT 1",
+    [id]
+  );
+  if (rows.length > 0 && rows[0].text === entry.text) return;
+
   await pool.query(
     "INSERT INTO transcript_entries (interview_id, role, text) VALUES ($1, $2, $3)",
     [id, entry.role, entry.text]

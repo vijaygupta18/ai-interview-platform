@@ -539,14 +539,14 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       const safetyTimeout = setTimeout(() => {
         if (isProcessingRef.current && generationRef.current === thisGeneration) {
           console.error("[AI] Safety timeout — force resetting after 30s");
-          serverLog("error", "AI safety timeout — force reset after 30s", interviewId);
+          serverLog("error", "AI safety timeout — force reset after 90s", interviewId);
           abortController.abort();
           isProcessingRef.current = false;
           setIsAIThinking(false);
           setIsAISpeaking(false);
           isAISpeakingRef.current = false;
         }
-      }, 30000);
+      }, 90000); // 90s — server retries AI call (35s × 2) + TTS + playback
 
       try {
         // Streaming AI + TTS pipeline

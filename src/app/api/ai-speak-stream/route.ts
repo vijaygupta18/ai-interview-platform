@@ -100,26 +100,43 @@ export async function POST(req: Request) {
           closed = true;
           try { controller.close(); } catch {}
         };
-        // 25s hard timeout on AI fetch — must be less than client's 30s safety timeout
-        const aiAbort = new AbortController();
-        const aiTimeout = setTimeout(() => aiAbort.abort(), 25000);
+        // AI fetch with retry — try twice with 35s timeout each
+        const makeAICall = async () => {
+          const abort = new AbortController();
+          const timeout = setTimeout(() => abort.abort(), 35000);
+          try {
+            const res = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${process.env.AI_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: process.env.AI_MODEL || "minimaxai/minimax-m2",
+                messages: aiMessages,
+                max_tokens: 500,
+                temperature: 0.3,
+                thinking: { type: "disabled" },
+                stream: true,
+              }),
+              signal: abort.signal,
+            });
+            clearTimeout(timeout);
+            return res;
+          } catch (err) {
+            clearTimeout(timeout);
+            throw err;
+          }
+        };
+
         try {
-          const aiRes = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.AI_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: process.env.AI_MODEL || "minimaxai/minimax-m2",
-              messages: aiMessages,
-              max_tokens: 500,
-              temperature: 0.3,
-              thinking: { type: "disabled" },
-              stream: true,
-            }),
-            signal: aiAbort.signal,
-          });
+          let aiRes;
+          try {
+            aiRes = await makeAICall();
+          } catch (firstErr) {
+            console.warn("[Stream] AI call failed, retrying:", (firstErr as Error).message);
+            aiRes = await makeAICall(); // retry once
+          }
 
           if (!aiRes.ok || !aiRes.body) {
             safeEnqueue(encoder.encode(`data: ${JSON.stringify({ error: "AI failed" })}\n\n`));
@@ -253,7 +270,7 @@ export async function POST(req: Request) {
           safeEnqueue(encoder.encode(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`));
           safeClose();
         } finally {
-          clearTimeout(aiTimeout);
+          // timeouts are cleared inside makeAICall
         }
       },
     });
