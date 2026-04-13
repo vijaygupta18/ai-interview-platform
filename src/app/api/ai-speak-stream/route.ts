@@ -116,7 +116,7 @@ export async function POST(req: Request) {
               body: JSON.stringify({
                 model: process.env.AI_MODEL || "minimaxai/minimax-m2",
                 messages: aiMessages,
-                max_tokens: 400,
+                max_tokens: 500,
                 temperature: 0.3,
                 stream: true,
                 // Only send thinking param for MiniMax models (Groq/OpenAI reject it)
