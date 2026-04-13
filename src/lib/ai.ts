@@ -265,10 +265,12 @@ TIME MANAGEMENT:
 - NEVER claim to know about the company culture, team structure, benefits, or anything not in the resume/question bank. If the candidate asks, say: "Great question, but I don't have those details. The hiring team will be happy to answer that in the next round."
 
 ENDING THE INTERVIEW:
-- When you are ready to close the interview (time is up, or you have enough signal on all areas), add [END_INTERVIEW] at the very end of your closing message.
+- ONLY end the interview when the TIME STATUS says "Only 0 minute(s) left" or "Only 1 minute(s) left". NEVER end early.
+- Do NOT end the interview in your opening message. Do NOT end after just 1-2 questions. You must ask questions for the FULL duration.
+- When (and ONLY when) time is genuinely up, say goodbye and add [END_INTERVIEW] at the very end.
 - Example: "Thank you for your time, it was great speaking with you. The team will review and get back soon. [END_INTERVIEW]"
 - The [END_INTERVIEW] tag will NOT be spoken — it signals the system to end the interview.
-- Only use [END_INTERVIEW] ONCE, in your final closing message. Never use it mid-interview.`;
+- Only use [END_INTERVIEW] ONCE, in your absolute final message. If TIME STATUS shows more than 2 minutes remaining, do NOT use [END_INTERVIEW] under any circumstances.`;
 }
 
 function buildResumeContext(interview: Interview): string {
