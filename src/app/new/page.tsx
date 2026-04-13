@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
 const LEVELS = ["Intern", "Junior", "Mid", "Senior", "Staff", "Principal", "Manager", "Director"];
-const DURATIONS = [10, 15, 20, 30, 45, 60];
+const DURATIONS = [10, 15, 20, 30, 45, 60, 90, 120];
 const ROUND_TYPES = ["General", "Technical", "Behavioral", "System Design", "Coding", "HR", "Culture Fit", "Managerial", "Case Study", "Puzzle"];
 const CODING_LANGUAGES = ["JavaScript", "TypeScript", "Python", "Java", "C++", "Go", "Rust", "Haskell", "Kotlin", "Swift", "Ruby", "C#", "Scala", "SQL", "PHP"];
 const FOCUS_AREAS = [
@@ -437,9 +437,30 @@ export default function NewInterviewPage() {
                   </div>
                   <div>
                     <label className="label">Duration</label>
-                    <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="input-field">
-                      {DURATIONS.map((d) => <option key={d} value={d}>{d} min</option>)}
-                    </select>
+                    <div className="flex gap-2">
+                      <select
+                        value={DURATIONS.includes(duration) ? duration : "custom"}
+                        onChange={(e) => {
+                          if (e.target.value === "custom") { setDuration(25); return; } // trigger custom input
+                          setDuration(Number(e.target.value));
+                        }}
+                        className="input-field flex-1"
+                      >
+                        {DURATIONS.map((d) => <option key={d} value={d}>{d} min</option>)}
+                        <option value="custom">Custom</option>
+                      </select>
+                      {!DURATIONS.includes(duration) && (
+                        <input
+                          type="number"
+                          min={5}
+                          max={180}
+                          value={duration}
+                          onChange={(e) => setDuration(Math.max(5, Math.min(180, Number(e.target.value))))}
+                          className="input-field w-20"
+                          placeholder="min"
+                        />
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="label">Round</label>
