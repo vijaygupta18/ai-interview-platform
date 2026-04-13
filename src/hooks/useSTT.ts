@@ -95,8 +95,10 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       const dgSocket = new WebSocket(wsUrl);
       dgSocketRef.current = dgSocket;
 
+      const connectTime = Date.now();
       dgSocket.onopen = () => {
-        reconnectCountRef.current = 0; // reset on successful connect — prevents death after 5 transient disconnects
+        // Only reset reconnect count if previous connection lasted >5s (stable)
+        // Rapid connect→disconnect loops should still count toward the 5-retry limit
         reconnectingRef.current = false;
         setConnected(true);
         setEverConnected(true);
@@ -183,11 +185,14 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
       dgSocket.onerror = () => console.error("[STT:deepgram] WebSocket error");
 
       dgSocket.onclose = (e) => {
-        console.log(`[STT] WebSocket disconnected code=${e.code}`);
+        const connectionDuration = Date.now() - connectTime;
+        console.log(`[STT] WebSocket disconnected code=${e.code} after ${Math.round(connectionDuration / 1000)}s`);
         setConnected(false);
         if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null; }
+        // Only reset reconnect count if connection lasted >5s (stable)
+        if (connectionDuration > 5000) reconnectCountRef.current = 0;
 
-        // #5: check stoppedRef + reconnecting guard to prevent overlapping chains
+        // check stoppedRef + reconnecting guard to prevent overlapping chains
         if (!stoppedRef.current && !isEnding.current && !reconnectingRef.current && reconnectCountRef.current < 5) {
           reconnectingRef.current = true;
           reconnectCountRef.current++;
