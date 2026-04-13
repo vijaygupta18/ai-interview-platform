@@ -34,6 +34,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const ua = req.headers.get("user-agent")?.substring(0, 40) || "unknown";
   console.log(`[Interview/end] ${id} called from referer=${caller} ua=${ua} currentStatus=${interview.status}`);
 
+  if (interview.status === "completed") {
+    return NextResponse.json({ error: "Interview already completed" }, { status: 400 });
+  }
+
   // Mark as completed
   await updateInterview(id, {
     status: "completed",

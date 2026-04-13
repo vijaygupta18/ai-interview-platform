@@ -25,6 +25,9 @@ export async function POST(req: Request) {
     if (!interview) {
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
     }
+    if (interview.status === "completed") {
+      return NextResponse.json({ error: "Interview already completed" }, { status: 400 });
+    }
 
     // Server-side proctoring enforcement
     const MAX_STRIKES = parseInt(process.env.MAX_PROCTORING_STRIKES || process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "25");

@@ -51,6 +51,9 @@ export async function POST(req: Request) {
     if (!interview) {
       return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
     }
+    if (interview.status === "completed") {
+      return new Response(JSON.stringify({ error: "Interview already completed" }), { status: 400 });
+    }
 
     const MAX_STRIKES = parseInt(process.env.MAX_PROCTORING_STRIKES || process.env.NEXT_PUBLIC_MAX_PROCTORING_STRIKES || "25");
     console.log(`[Proctoring] Interview ${interviewId}: violations=${violations}/${MAX_STRIKES}`);

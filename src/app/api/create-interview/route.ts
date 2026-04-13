@@ -38,7 +38,8 @@ export async function POST(req: Request) {
     const candidateName = (formData.get("candidateName") as string) || "";
     const candidatePhone = (formData.get("candidatePhone") as string) || "";
     const focusAreas = (formData.get("focusAreas") as string)?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
-    const duration = parseInt(formData.get("duration") as string) || 30;
+    const durationRaw = parseInt(formData.get("duration") as string);
+    const duration = isNaN(durationRaw) ? 30 : durationRaw;
     const roundType = (formData.get("roundType") as string) || "General";
     const language = (formData.get("language") as string) || "";
     const emailTemplateId = (formData.get("emailTemplateId") as string) || "";
@@ -47,6 +48,9 @@ export async function POST(req: Request) {
 
     if (!role || !level) {
       return NextResponse.json({ error: "Missing required fields: role, level" }, { status: 400 });
+    }
+    if (duration < 5 || duration > 180) {
+      return NextResponse.json({ error: "Duration must be between 5 and 180 minutes" }, { status: 400 });
     }
 
     let resumeText = "";
