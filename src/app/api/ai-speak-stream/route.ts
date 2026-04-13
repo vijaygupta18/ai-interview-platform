@@ -18,6 +18,9 @@ function cleanForTTS(text: string): string {
     .replace(/\.\.\./g, ".")           // ellipsis
     .replace(/—|–/g, ", ")             // em/en dash → comma pause
     .replace(/\n+/g, " ")              // newlines to space
+    // Strip non-English characters — MiniMax (Chinese model) leaks CJK/Unicode
+    // that renders invisible on screen but Sarvam TTS speaks as foreign language
+    .replace(/[^\x20-\x7E\u00C0-\u024F]/g, " ") // keep ASCII + Latin Extended only
     .replace(/\s{2,}/g, " ")           // collapse spaces
     .trim();
 }

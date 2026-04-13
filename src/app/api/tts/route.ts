@@ -17,7 +17,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing text" }, { status: 400 });
     }
 
-    const cleanedText = stripThinking(text);
+    // Strip thinking tags, then remove non-English Unicode (MiniMax leaks CJK chars)
+    const cleanedText = stripThinking(text).replace(/[^\x20-\x7E\u00C0-\u024F]/g, " ").replace(/\s{2,}/g, " ").trim();
     const ttsProvider = getTTSProvider();
     const audioBuffer = await ttsProvider.synthesize(cleanedText);
 
