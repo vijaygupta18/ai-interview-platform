@@ -1618,12 +1618,13 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               )}
               <div ref={transcriptEndRef} />
             </div>
-            {/* Go to bottom — sticks above skip/chat area */}
+            </div>
+            {/* Go to bottom — floats above scroll area */}
             {showScrollBottom && (
-              <div className="border-t border-white/5 px-3 py-1.5 text-center">
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10">
                 <button
                   onClick={scrollToBottom}
-                  className="rounded-full bg-blue-600/80 px-3 py-1 text-xs text-white hover:bg-blue-500 transition-all inline-flex items-center gap-1"
+                  className="rounded-full bg-blue-600/90 px-3 py-1.5 text-xs text-white hover:bg-blue-500 transition-all inline-flex items-center gap-1 shadow-lg shadow-black/30"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
@@ -1632,7 +1633,6 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 </button>
               </div>
             )}
-            </div>
             {/* Skip voice — only stops audio, text stays in transcript */}
             {isAISpeaking && (
               <div className="border-t border-white/5 px-3 py-2">
