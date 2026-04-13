@@ -15,6 +15,7 @@ interface UseSTTOptions {
   silenceDelayMs?: number;
   onInterim: (text: string) => void;
   onComplete: (text: string) => void;
+  onInterrupt?: () => void; // called when candidate speaks during AI speech — stops TTS
 }
 
 interface UseSTTReturn {
@@ -26,7 +27,9 @@ interface UseSTTReturn {
 }
 
 export function useSTT(options: UseSTTOptions): UseSTTReturn {
-  const { providers, interviewId, token, isAISpeaking, isStarted, isEnding, mediaStream, silenceDelayMs = 4000, onInterim, onComplete } = options;
+  const { providers, interviewId, token, isAISpeaking, isStarted, isEnding, mediaStream, silenceDelayMs = 4000, onInterim, onComplete, onInterrupt } = options;
+  const onInterruptRef = useRef(onInterrupt);
+  onInterruptRef.current = onInterrupt;
 
   const [connected, setConnected] = useState(false);
   const [everConnected, setEverConnected] = useState(false);
@@ -141,8 +144,15 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
         let data: any;
         try { data = JSON.parse(raw); } catch { return; }
 
-        // Skip during AI speech (echo prevention)
-        if (isAISpeaking.current) return;
+        // If candidate speaks during AI speech — interrupt (stop TTS, let them talk)
+        if (isAISpeaking.current) {
+          // Check if this is real speech (not just noise)
+          const hasRealText = data.type === "Results" && data.channel?.alternatives?.[0]?.transcript?.trim().length > 3;
+          if (hasRealText && onInterruptRef.current) {
+            onInterruptRef.current(); // stops TTS audio, text stays on screen
+          }
+          return; // still drop STT results during transition
+        }
 
         // UtteranceEnd — server detected speech ended. Don't fire immediately;
         // instead reset the silence timer so the candidate still gets the full

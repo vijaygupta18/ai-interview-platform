@@ -78,11 +78,11 @@ function addWSProxy(server) {
   });
 
   // ─── Soniox response normalizer (stateful per connection) ──────────
-  // Soniox uses a sliding window of tokens — old finals get dropped.
-  // Simple approach: emit ALL text as interim on each message, then on
-  // <end> event emit the full utterance as is_final=true + UtteranceEnd.
+  // KEY PROTOCOL FACT: Final tokens appear ONCE then disappear from subsequent messages.
+  // Non-final tokens are the live preview that gets REPLACED each message.
+  // Client MUST accumulate final tokens — they are never repeated.
   function createSonioxNormalizer() {
-    let utteranceText = ""; // accumulates the full utterance across messages
+    let accumulatedFinals = []; // all finalized token texts for current utterance
 
     return function normalize(raw) {
       try {
@@ -94,28 +94,46 @@ function addWSProxy(server) {
         if (!msg.tokens || msg.tokens.length === 0) return [];
 
         const results = [];
-        const realTokens = msg.tokens.filter(t => !t.text.startsWith("<"));
-        const hasEnd = msg.tokens.some(t => t.text === "<end>");
-        // Build full text from all tokens in this message (Soniox sends the complete
-        // current state — finals + non-finals — as a sliding window)
-        const fullText = realTokens.map(t => t.text).join("").trim();
+        const nonFinalTexts = [];
+        let hasEnd = false;
+
+        for (const token of msg.tokens) {
+          if (token.text === "<end>" || token.text === "<fin>") {
+            hasEnd = true;
+            continue;
+          }
+          if (token.text.startsWith("<")) continue; // skip other special tokens
+
+          if (token.is_final) {
+            // Final token — appears ONCE then disappears. Accumulate it.
+            accumulatedFinals.push(token.text);
+          } else {
+            // Non-final — live preview tail, replaced each message
+            nonFinalTexts.push(token.text);
+          }
+        }
+
+        // Full text = all accumulated finals + current non-final tail
+        const finalText = accumulatedFinals.join("");
+        const nonFinalText = nonFinalTexts.join("");
+        const fullText = (finalText + nonFinalText).trim();
 
         if (hasEnd) {
-          // Utterance complete — emit the final text as is_final=true
-          const finalText = (utteranceText + " " + fullText).trim() || fullText;
-          if (finalText) {
+          // <end> guarantees all preceding tokens are final.
+          // Emit the complete accumulated text as is_final=true.
+          if (fullText) {
             results.push(JSON.stringify({
               type: "Results",
               is_final: true,
               speech_final: true,
-              channel: { alternatives: [{ transcript: finalText, confidence: 0.95 }] },
+              channel: { alternatives: [{ transcript: fullText, confidence: 0.95 }] },
             }));
           }
           results.push(JSON.stringify({ type: "UtteranceEnd" }));
-          utteranceText = "";
+          // Reset for next utterance
+          accumulatedFinals = [];
         } else if (fullText) {
-          // Still speaking — emit as interim for live preview
-          utteranceText = fullText; // track latest complete text
+          // Still speaking — emit interim with full accumulated text
           results.push(JSON.stringify({
             type: "Results",
             is_final: false,
