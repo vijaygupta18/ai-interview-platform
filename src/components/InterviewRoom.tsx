@@ -148,8 +148,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
   const [fullscreenCountdown, setFullscreenCountdown] = useState(0);
   const [isEnding, setIsEnding] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
+  const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   const [expired, setExpired] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [aiError, setAiError] = useState(false);
+  const lastTranscriptRef = useRef<TranscriptEntry[]>([]);
 
   // Runtime config from /api/config — avoids NEXT_PUBLIC_* build-time baking
   // Default must be HIGH to avoid false terminations before config loads
@@ -593,6 +596,8 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       if (isEndingRef.current) return;
       isProcessingRef.current = true;
       setIsAIThinking(true);
+      setAiError(false);
+      lastTranscriptRef.current = currentTranscript;
       const thisGeneration = ++generationRef.current;
 
       // Abort any previous in-flight request
@@ -708,7 +713,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
               }
               if (data.type === "audio") { audioMap.set(data.idx, { audio: data.audio, contentType: data.contentType }); playNext(); }
               if (data.type === "audio_skip") { skippedIdxs.add(data.idx); playNext(); }
-              if (data.error) { console.error("[AI] Server error:", data.error); serverLog("error", `SSE error: ${data.error}`, interviewId); }
+              if (data.error) { console.error("[AI] Server error:", data.error); serverLog("error", `SSE error: ${data.error}`, interviewId); setAiError(true); }
               if (data.type === "done") {
                 if (data.fullText) { setTranscript((prev) => { const u = [...prev]; if (u.length > 0 && u[u.length-1].role === "ai") u[u.length-1] = { ...u[u.length-1], text: data.fullText }; return u; }); }
                 // AI decided to end the interview — redirect after TTS finishes
@@ -740,6 +745,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         } else {
           console.error("[AI] Response failed:", err);
           serverLog("error", "AI response failed", interviewId, { error: String(err) });
+          setAiError(true);
         }
         setIsAISpeaking(false);
         isAISpeakingRef.current = false;
@@ -1344,10 +1350,10 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         {/* Start Button */}
         <button
           onClick={handleStartInterview}
-          disabled={!cameraReady || !micReady || !screenSharing}
+          disabled={!cameraReady || !micReady || (!screenSharing && !isMobile)}
           className="glow-blue rounded-xl bg-blue-600 px-10 py-3.5 text-lg font-semibold text-white transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
-          {!screenSharing ? "Share screen to continue" : "Start Interview"}
+          {!screenSharing && !isMobile ? "Share screen to continue" : "Start Interview"}
         </button>
       </div>
     );
@@ -1414,11 +1420,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row flex-1 gap-3 overflow-hidden p-3">
+      <div className="flex flex-col lg:flex-row flex-1 gap-2 sm:gap-3 overflow-hidden p-2 sm:p-3">
         {/* Left: Video + AI Avatar */}
-        <div className="flex flex-[5] flex-col gap-3">
+        <div className="flex flex-[5] flex-col gap-2 sm:gap-3">
           {/* Video Feed */}
-          <div className="relative flex-[3] min-h-[200px] lg:min-h-0 overflow-hidden rounded-2xl border border-white/5 bg-zinc-900">
+          <div className="relative flex-[3] min-h-[150px] sm:min-h-[200px] lg:min-h-0 overflow-hidden rounded-xl sm:rounded-2xl border border-white/5 bg-zinc-900">
             <video
               ref={videoCallbackRef}
               autoPlay
@@ -1646,6 +1652,40 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
           }
           label={cameraEnabled ? "Stop Video" : "Start Video"}
         />
+        {/* Skip AI — stop current audio and let candidate respond */}
+        {isAISpeaking && (
+          <button
+            onClick={() => {
+              if (activeAbortRef.current) { activeAbortRef.current.abort(); activeAbortRef.current = null; }
+              if (activeReaderRef.current) { try { activeReaderRef.current.cancel(); } catch {} activeReaderRef.current = null; }
+              if (currentAudioRef.current) {
+                const src = currentAudioRef.current.src;
+                currentAudioRef.current.pause();
+                currentAudioRef.current = null;
+                if (src?.startsWith("blob:")) URL.revokeObjectURL(src);
+              }
+              setIsAISpeaking(false);
+              isAISpeakingRef.current = false;
+              setCurrentAIText("");
+              isProcessingRef.current = false;
+            }}
+            className="rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-amber-500"
+          >
+            Skip
+          </button>
+        )}
+        {/* Retry — re-send last transcript after AI failure */}
+        {aiError && !isProcessingRef.current && (
+          <button
+            onClick={() => {
+              setAiError(false);
+              getAIResponse(lastTranscriptRef.current);
+            }}
+            className="rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-blue-500 animate-pulse"
+          >
+            Retry AI
+          </button>
+        )}
         <button
           onClick={() => setShowEndConfirm(true)}
           className="glow-red rounded-full bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-red-500"
