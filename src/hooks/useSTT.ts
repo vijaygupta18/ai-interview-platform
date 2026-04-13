@@ -150,8 +150,14 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
           const hasRealText = data.type === "Results" && data.channel?.alternatives?.[0]?.transcript?.trim().length > 3;
           if (hasRealText && onInterruptRef.current) {
             onInterruptRef.current(); // stops TTS audio, text stays on screen
+            // Push interrupt text into final buffer so silence timer starts.
+            // Without this, text shows on screen but never triggers AI response
+            // because candidate already finished speaking and no more STT results come.
+            const interruptText = data.channel.alternatives[0].transcript;
+            handleFinalText(interruptText, false);
+            handleInterimText("");
           }
-          return; // still drop STT results during transition
+          return;
         }
 
         // UtteranceEnd — server detected speech ended. Don't fire immediately;

@@ -45,7 +45,7 @@ function getSTTConfig() {
         audio_format: "auto", // auto-detects webm/opus from MediaRecorder
         num_channels: 1,
         language_hints: [language.split("-")[0]], // "en-IN" → "en"
-        language_hints_strict: false,
+        language_hints_strict: true,
         enable_endpoint_detection: true,
         max_endpoint_delay_ms: 3000,
         // NOTE: diarization DISABLED — it prevents <end> tokens from being sent

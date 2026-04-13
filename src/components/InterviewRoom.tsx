@@ -839,16 +839,25 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       });
     },
     onInterrupt: () => {
-      // Candidate spoke during AI speech — stop audio, text stays on screen
-      if (currentAudioRef.current) {
-        const src = currentAudioRef.current.src;
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-        if (src?.startsWith("blob:")) URL.revokeObjectURL(src);
-      }
+      // Candidate spoke during AI speech — stop audio, abort stream, reset processing
+      try {
+        if (currentAudioRef.current) {
+          const src = currentAudioRef.current.src;
+          currentAudioRef.current.pause();
+          currentAudioRef.current = null;
+          if (src?.startsWith("blob:")) URL.revokeObjectURL(src);
+        }
+        // Cancel reader first (before abort) to avoid BodyStreamBuffer error
+        if (activeReaderRef.current) { try { activeReaderRef.current.cancel(); } catch {} activeReaderRef.current = null; }
+        if (activeAbortRef.current) { try { activeAbortRef.current.abort(); } catch {} activeAbortRef.current = null; }
+      } catch {}
+      // Reset processing flag — without this, "Already processing" blocks all future AI calls
+      isProcessingRef.current = false;
       setIsAISpeaking(false);
       isAISpeakingRef.current = false;
-      console.log("[STT] Candidate interrupted AI — stopped TTS");
+      setIsAIThinking(false);
+      setCurrentAIText("");
+      console.log("[STT] Candidate interrupted AI — stopped TTS + reset pipeline");
     },
   });
 
