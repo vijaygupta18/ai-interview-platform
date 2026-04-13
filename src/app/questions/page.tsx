@@ -311,18 +311,20 @@ export default function QuestionsPage() {
                   Questions ({questions.length})
                 </label>
                 <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
+                  <textarea
                     value={newQuestion}
                     onChange={(e) => setNewQuestion(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addQuestion())}
-                    placeholder="Type a question and press Add"
-                    className="input-field flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addQuestion(); }
+                    }}
+                    placeholder={"Type a question and press Add (Shift+Enter for new line)\n\nSupports formatting:\n- Lists with dashes\n| Tables | with | pipes |\nGroups on separate lines"}
+                    rows={3}
+                    className="input-field flex-1 resize-none"
                   />
                   <button
                     type="button"
                     onClick={addQuestion}
-                    className="btn-secondary"
+                    className="btn-secondary self-end"
                   >
                     Add
                   </button>
@@ -335,7 +337,7 @@ export default function QuestionsPage() {
                       style={{ animationDelay: `${i * 30}ms` }}
                     >
                       <span className="text-xs text-gray-400 mt-0.5 shrink-0">{i + 1}.</span>
-                      <p className="text-sm text-gray-700 flex-1">{q}</p>
+                      <p className="text-sm text-gray-700 flex-1 whitespace-pre-line">{q}</p>
                       <button
                         onClick={() => removeQuestion(i)}
                         className="text-gray-300 hover:text-red-500 transition shrink-0 opacity-0 group-hover:opacity-100"

@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const hbRows = hbResult.rows;
     if (hbRows.length > 0 && hbRows[0].last_heartbeat_at) {
       const elapsed = Date.now() - new Date(hbRows[0].last_heartbeat_at).getTime();
-      if (elapsed > 60000) {
+      if (elapsed > 120000) {
         addProctoringEvent(interviewId, {
           type: "heartbeat_missing", severity: "flag",
           message: `No heartbeat for ${Math.round(elapsed / 1000)}s`,
@@ -116,7 +116,7 @@ export async function POST(req: Request) {
               body: JSON.stringify({
                 model: process.env.AI_MODEL || "minimaxai/minimax-m2",
                 messages: aiMessages,
-                max_tokens: 500,
+                max_tokens: 1000,
                 temperature: 0.3,
                 stream: true,
                 // Only send thinking param for MiniMax models (Groq/OpenAI reject it)

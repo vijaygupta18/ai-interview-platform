@@ -9,16 +9,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const url = new URL(req.url);
 
-  // Share mode: allow unauthenticated read-only access for completed interviews
+  // Share mode: read-only access for completed interviews — strip all PII
   const shareMode = url.searchParams.get("share") === "true";
   if (shareMode) {
     const interview = await getInterview(id);
     if (interview && interview.status === "completed") {
       return NextResponse.json({
-        ...interview,
-        resume: "",
-        token: "",
-        browserFingerprint: null,
+        role: interview.role,
+        level: interview.level,
+        focusAreas: interview.focusAreas,
+        duration: interview.duration,
+        roundType: interview.roundType,
+        status: interview.status,
+        scorecard: interview.scorecard,
+        transcript: interview.transcript,
+        // PII stripped: no email, name, phone, resume, token, proctoring photos
       });
     }
     return NextResponse.json({ error: "Not available for sharing" }, { status: 404 });

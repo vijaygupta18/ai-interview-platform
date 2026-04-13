@@ -912,11 +912,16 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       videoTrack.enabled = !videoTrack.enabled;
       setCameraEnabled(videoTrack.enabled);
       if (!videoTrack.enabled) {
-        // Fire camera_off proctoring event directly (can't reference onProctoringEvent here due to declaration order)
+        // First time = warning (info severity, no strike). Repeat = flag (counts as strike).
+        const cameraOffCount = (window as any).__cameraOffCount = ((window as any).__cameraOffCount || 0) + 1;
+        const severity = cameraOffCount <= 1 ? "info" : "flag";
+        const message = cameraOffCount <= 1
+          ? "Camera turned off — please keep your camera on during the interview"
+          : "Camera turned off again — this counts as a violation";
         fetch("/api/proctor-event", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ interviewId, type: "camera_off", severity: "flag", message: "Candidate turned off camera", token: tokenRef.current }),
+          body: JSON.stringify({ interviewId, type: "camera_off", severity, message, token: tokenRef.current }),
         }).catch(() => {});
       }
     }

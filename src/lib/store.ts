@@ -232,12 +232,17 @@ async function getProctoringEventsWithPhotos(interviewId: string): Promise<Proct
 }
 
 export async function getProctoringViolationCount(interviewId: string): Promise<number> {
+  // Weights must match client-side strikeWeights in InterviewRoom.tsx
   const { rows } = await pool.query(
     `SELECT COALESCE(SUM(
       CASE type
-        WHEN 'face_missing' THEN 0.5
-        WHEN 'eye_away' THEN 0.5
-        ELSE 1
+        WHEN 'face_missing' THEN 0.25
+        WHEN 'multiple_faces' THEN 1
+        WHEN 'screen_share_stopped' THEN 0.5
+        WHEN 'fullscreen_exit' THEN 0.25
+        WHEN 'window_blur' THEN 0.5
+        WHEN 'camera_off' THEN 1
+        ELSE 0
       END
     ), 0) as weighted_count
     FROM proctoring_events WHERE interview_id = $1 AND severity = 'flag'`,
@@ -293,12 +298,12 @@ export async function getInterviewByToken(token: string): Promise<Interview | nu
 }
 
 export async function addTranscriptEntry(id: string, entry: TranscriptEntry): Promise<void> {
-  // Deduplicate: skip if the last entry for this interview has the same role+text
+  // Deduplicate: skip if the last entry has same role AND text (prevents double-save on retry)
   const { rows } = await pool.query(
-    "SELECT text FROM transcript_entries WHERE interview_id = $1 ORDER BY id DESC LIMIT 1",
+    "SELECT role, text FROM transcript_entries WHERE interview_id = $1 ORDER BY id DESC LIMIT 1",
     [id]
   );
-  if (rows.length > 0 && rows[0].text === entry.text) return;
+  if (rows.length > 0 && rows[0].role === entry.role && rows[0].text === entry.text) return;
 
   await pool.query(
     "INSERT INTO transcript_entries (interview_id, role, text) VALUES ($1, $2, $3)",

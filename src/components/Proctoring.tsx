@@ -109,7 +109,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
     if (!enabled) return;
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        alert("fullscreen_exit", "flag", "Candidate exited fullscreen mode");
+        alert("fullscreen_exit", "flag", "Please stay in fullscreen mode during the interview");
       }
     };
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -130,9 +130,9 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (now - lastAlert < 10000) return; // 10s global debounce (was 5s)
       lastAlert = now;
       if (duration > 15000) {
-        alert("window_blur", "flag", `Candidate left the interview window for ${Math.round(duration / 1000)}s`);
+        alert("window_blur", "flag", `You switched away from the interview for ${Math.round(duration / 1000)} seconds — please stay focused`);
       } else {
-        alert("window_blur", "flag", `Candidate left the interview window briefly`);
+        alert("window_blur", "flag", "Frequent tab switching detected — please stay on the interview page");
       }
     };
 
@@ -363,13 +363,18 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
         consecutiveMultipleFaces = 0;
         // Only alert after 3 consecutive misses (~18s) — handles bad lighting, sneezing, leaning
         if (consecutiveFaceMissing >= 3) {
-          alert("face_missing", "flag", "No face detected — please face the camera");
+          alert("face_missing", "flag", "We can't see you — please make sure your face is visible to the camera");
           consecutiveFaceMissing = 0;
         }
       } else if (faceCount > 1) {
+        consecutiveMultipleFaces++;
         consecutiveFaceMissing = 0;
-        // Fire immediately — multiple faces is a strong cheating signal
-        alert("multiple_faces", "flag", `${faceCount} faces detected`);
+        // Require 3 consecutive detections (~18s) — family walking behind = 1-2 frames, not cheating
+        // Someone sitting there helping = sustained presence = 3+ frames = real signal
+        if (consecutiveMultipleFaces >= 3) {
+          alert("multiple_faces", "flag", "Another person detected in the frame — please ensure you are alone during the interview");
+          consecutiveMultipleFaces = 0;
+        }
       } else {
         // Face detected normally — reset counters
         consecutiveFaceMissing = 0;

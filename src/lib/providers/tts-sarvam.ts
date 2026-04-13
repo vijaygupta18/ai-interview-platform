@@ -42,7 +42,11 @@ export class SarvamTTS implements TTSProvider {
     if (!data.audios || data.audios.length === 0) throw new Error("No audio from Sarvam");
 
     const buffers = data.audios.map((b64: string) => Buffer.from(b64, "base64"));
-    return Buffer.concat(buffers);
+    if (buffers.length === 1) return buffers[0];
+    // Strip WAV headers (44 bytes) from subsequent chunks to avoid invalid multi-header WAV
+    const first = buffers[0];
+    const rest = buffers.slice(1).map((buf: Buffer) => buf.length > 44 ? buf.slice(44) : buf);
+    return Buffer.concat([first, ...rest]);
   }
 
   private splitText(text: string, maxLen: number): string[] {

@@ -504,7 +504,7 @@ export default function NewInterviewPage() {
                       return qs.length > 0 ? (
                         <div className="mt-2 space-y-1 max-h-[100px] overflow-y-auto rounded-lg border border-gray-100 p-2 bg-gray-50">
                           {qs.map((q, i) => (
-                            <p key={i} className="text-xs text-gray-600">{i + 1}. {q}</p>
+                            <p key={i} className="text-xs text-gray-600 whitespace-pre-line">{i + 1}. {q}</p>
                           ))}
                         </div>
                       ) : null;
