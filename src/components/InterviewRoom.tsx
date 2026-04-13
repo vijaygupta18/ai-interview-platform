@@ -218,7 +218,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       channel.postMessage({ type: "tab-open", timestamp: Date.now() });
       channel.onmessage = (e) => {
         if (e.data.type === "tab-open") {
-          window.location.href = `/completed/${interviewId}`;
+          window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
         }
       };
       return () => channel.close();
@@ -227,7 +227,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       const key = `interview-active-${interviewId}`;
       const existing = localStorage.getItem(key);
       if (existing && Date.now() - parseInt(existing) < 30000) {
-        window.location.href = `/completed/${interviewId}`;
+        window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
         return;
       }
       localStorage.setItem(key, String(Date.now()));
@@ -253,7 +253,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         }
         // Redirect to review if interview is already completed
         if (interview.status === "completed") {
-          window.location.href = `/completed/${interviewId}`;
+          window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
           return;
         }
         setInterviewData(interview);
@@ -278,7 +278,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                 body: JSON.stringify({ token: tokenRef.current }),
               }).catch(() => {});
             }
-            window.location.href = `/completed/${interviewId}`;
+            window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
             return;
           }
 
@@ -514,7 +514,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }).catch(console.error);
 
       // Redirect to completion page
-      window.location.href = `/completed/${interviewId}`;
+      window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
     }
 
     autoEnd();
@@ -535,6 +535,11 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
     setShowScrollBottom(false);
   }, []);
+
+  // Check if we should show "new messages" when transcript updates
+  useEffect(() => {
+    handleTranscriptScroll();
+  }, [transcript, interimTranscript, handleTranscriptScroll]);
 
   // Dismiss proctoring alerts after 5s
   useEffect(() => {
@@ -737,7 +742,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
                     await new Promise((r) => setTimeout(r, 5000));
                     stt.stop();
                     mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-                    window.location.href = `/completed/${interviewId}`;
+                    window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
                   };
                   waitForAudio();
                 }
@@ -918,7 +923,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
 
     // Redirect to completion page (not scorecard — that's for interviewers only)
-    window.location.href = `/completed/${interviewId}`;
+    window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
   }, [interviewId]);
 
   const toggleMic = useCallback(() => {
@@ -1027,7 +1032,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: tokenRef.current }),
       }).catch(console.error);
-      window.location.href = `/completed/${interviewId}`;
+      window.location.href = `/completed/${interviewId}?token=${tokenRef.current}`;
     }, 10000);
     return () => clearTimeout(timer);
   }, [showProctoringBan, interviewId]);
