@@ -141,9 +141,14 @@ export async function POST(req: Request) {
         };
 
         try {
-          let aiRes;
+          let aiRes: Response;
           try {
             aiRes = await makeAICall(1);
+            // Retry on 5xx — Cerebras occasionally returns transient 503
+            if (aiRes.status >= 500 && aiRes.status < 600) {
+              console.warn(`[Stream] AI returned ${aiRes.status} on attempt 1, retrying...`);
+              aiRes = await makeAICall(2);
+            }
           } catch (firstErr) {
             console.warn(`[Stream] Retrying AI call for ${interviewId}...`);
             aiRes = await makeAICall(2);

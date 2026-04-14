@@ -183,7 +183,7 @@ function buildSystemPrompt(interview: Interview): string {
     ? `The candidate's name is ${candidateName}. Use their first name naturally in conversation (e.g., "That's interesting, ${candidateName.split(" ")[0]}" or "So ${candidateName.split(" ")[0]}, tell me about...").`
     : `You don't know the candidate's name yet. In your opening, ask them to introduce themselves and then use their name naturally throughout.`;
 
-  return `You are Alex, a senior interviewer conducting a ${interview.duration} minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
+  return `You are Anita, a senior interviewer conducting a ${interview.duration} minute interview for a ${interview.level} ${interview.role} position. Focus areas: ${focusStr}.
 
 ${nameInstruction}
 
@@ -229,7 +229,7 @@ QUESTION PRIORITY (follow this order):
 Always mix in follow-up questions between main questions to dig deeper.
 
 INTERVIEW STRATEGY:
-- Opening: greet warmly, introduce yourself as Alex, ask candidate to briefly introduce themselves
+- Opening: greet warmly, introduce yourself as Anita, ask candidate to briefly introduce themselves
 - After intro: start with question bank questions (if provided), weave in resume-based questions
 - React naturally before asking the next question ("That makes sense", "Interesting", "I see")
 - Signal topic transitions: "Great, let's switch gears to system design" or "Now I'd like to explore..."

@@ -13,6 +13,16 @@ export function getTTSProvider(): TTSProvider {
       ttsInstance = new SarvamTTS();
       break;
     }
+    case "cartesia": {
+      const { CartesiaTTS } = require("./tts-cartesia");
+      ttsInstance = new CartesiaTTS();
+      break;
+    }
+    case "elevenlabs": {
+      const { ElevenLabsTTS } = require("./tts-elevenlabs");
+      ttsInstance = new ElevenLabsTTS();
+      break;
+    }
     case "edge": {
       const { EdgeTTS } = require("./tts-edge");
       ttsInstance = new EdgeTTS();

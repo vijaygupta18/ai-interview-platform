@@ -68,7 +68,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       // Cooldowns tuned for Indian conditions — longer gaps between repeated alerts
       const cooldowns: Record<string, number> = {
         second_monitor: 300000,
-        multiple_faces: 30000,   // 30s — family walking behind shouldn't spam
+        multiple_faces: 15000,   // 15s cooldown
         face_missing: 30000,     // 30s — bad lighting triggers this constantly
         eye_away: 30000,
         devtools_open: 60000,
@@ -314,7 +314,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
                 delegate,
               },
               runningMode: "IMAGE",
-              minDetectionConfidence: 0.5,
+              minDetectionConfidence: 0.3,
             });
             console.log(`[Proctoring] MediaPipe FaceDetector loaded (${delegate})`);
             loaded = true;
@@ -361,17 +361,17 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       if (faceCount === 0) {
         consecutiveFaceMissing++;
         consecutiveMultipleFaces = 0;
-        // Only alert after 3 consecutive misses (~18s) — handles bad lighting, sneezing, leaning
-        if (consecutiveFaceMissing >= 3) {
+        // 12 consecutive misses at 1.5s interval = ~18s — handles bad lighting, sneezing, leaning
+        if (consecutiveFaceMissing >= 12) {
           alert("face_missing", "flag", "We can't see you — please make sure your face is visible to the camera");
           consecutiveFaceMissing = 0;
         }
       } else if (faceCount > 1) {
         consecutiveMultipleFaces++;
         consecutiveFaceMissing = 0;
-        // Require 3 consecutive detections (~18s) — family walking behind = 1-2 frames, not cheating
-        // Someone sitting there helping = sustained presence = 3+ frames = real signal
-        if (consecutiveMultipleFaces >= 3) {
+        console.log(`[Proctoring] ${faceCount} faces detected (consecutive: ${consecutiveMultipleFaces})`);
+        // 2 consecutive detections at 1.5s interval = ~3s
+        if (consecutiveMultipleFaces >= 2) {
           alert("multiple_faces", "flag", "Another person detected in the frame — please ensure you are alone during the interview");
           consecutiveMultipleFaces = 0;
         }
@@ -383,7 +383,7 @@ export default function Proctoring({ videoRef, interviewId, enabled, onAlert, to
       // eye_away detection removed from strike counting — still fires but weight=0
     };
 
-    const interval = setInterval(detect, 6000); // 6s interval (was 4s) — less CPU, fewer false positives
+    const interval = setInterval(detect, 1500); // 1.5s — fast multi-face detection (~3s alert)
     return () => {
       cancelled = true;
       clearInterval(interval);
