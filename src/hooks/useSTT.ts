@@ -191,9 +191,21 @@ export function useSTT(options: UseSTTOptions): UseSTTReturn {
           handleInterimText("");
         } else if (!isFinal && text) {
           handleInterimText(text);
-          // #9: only cancel silence timer if we have interim speech (prevents indefinite delay)
-          if (text.trim() && silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
+          // Interim = user is still speaking, postpone the silence trigger.
+          // BUT if we already have buffered text, restart timer so we don't
+          // wait forever for a final that may never come (esp. after interrupt
+          // where final tokens were already sent during dropped AI-speech window).
+          if (text.trim()) {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            if (finalBufferRef.current.trim()) {
+              silenceTimerRef.current = setTimeout(() => {
+                if (stoppedRef.current || isEnding.current) return;
+                const full = finalBufferRef.current.trim();
+                if (!full) return;
+                finalBufferRef.current = "";
+                onCompleteRef.current(full);
+              }, silenceDelayMs);
+            }
           }
         }
       };
