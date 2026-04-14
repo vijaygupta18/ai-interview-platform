@@ -30,7 +30,7 @@ export class ElevenLabsTTS implements TTSProvider {
     }
   }
 
-  private async _call(text: string, apiKey: string): Promise<Buffer> {
+  private async _call(text: string, apiKey: string, attempt = 1): Promise<Buffer> {
 
     const voiceId = process.env.ELEVENLABS_VOICE_ID || "2BJW5coyhAzSr8STdHbE"; // Aditi - Indian English female
     const model = process.env.ELEVENLABS_MODEL || "eleven_turbo_v2_5";
@@ -62,6 +62,14 @@ export class ElevenLabsTTS implements TTSProvider {
         }),
         signal: controller.signal,
       });
+
+      // 409 "already_running" — library voice is being added by a concurrent call.
+      // Retry with backoff up to 3 times.
+      if (res.status === 409 && attempt < 4) {
+        clearTimeout(timeout);
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+        return this._call(text, apiKey, attempt + 1);
+      }
 
       if (!res.ok) {
         const err = await res.text();
