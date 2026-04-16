@@ -420,8 +420,25 @@ export async function generateScorecard(interview: Interview): Promise<string> {
     return "tech:25, comm:20, problem:20, domain:20, culture:15.";
   })();
 
-  const scorecardPrompt = `Senior evaluator scoring ${interview.level} ${interview.role}. Candidate: ${candidateName}. Focus: ${interview.focusAreas.join(", ")}.
-Context: ${interviewDurationMin}min interview, ${transcriptMessages} msgs (${candidateMessages} from candidate), STT-transcribed.
+  const interviewMeta = [
+    `Role: ${interview.level} ${interview.role}`,
+    `Round: ${(interview as any).roundType || "General"}`,
+    (interview as any).language ? `Language: ${(interview as any).language}` : null,
+    `Duration: ${interviewDurationMin}min, ${transcriptMessages} msgs (${candidateMessages} from candidate)`,
+    `Focus areas: ${interview.focusAreas.join(", ")}`,
+  ].filter(Boolean).join(" | ");
+
+  const orgGuidelinesBlock = settings.behavior.customGuidelines.trim()
+    ? `\n## Org-Specific Interviewer Guidelines (the rules the interviewer was given)\n${settings.behavior.customGuidelines.trim()}`
+    : "";
+
+  const bannedBlock = settings.boundaries.bannedTopics.length > 0
+    ? `\n## Banned Topics (interviewer was told to avoid)\n${settings.boundaries.bannedTopics.join(", ")}`
+    : "";
+
+  const scorecardPrompt = `Senior evaluator scoring ${interview.level} ${interview.role}. Candidate: ${candidateName}.
+${interviewMeta}.
+STT-transcribed input.
 
 ${levelBar}
 
@@ -451,11 +468,22 @@ Before scoring, identify which focus areas (${interview.focusAreas.join(", ")}) 
 - Focus area NOT covered at all → score that dimension at 2 (max), note in weaknesses as "not tested: <area>"
 - List the covered vs uncovered areas in the "coverage" field of the output.
 
+## Resume + Question Bank + Additional Context (everything the interviewer was given)
+${(interview.resume || "No resume provided.").substring(0, 8000)}
+${orgGuidelinesBlock}${bannedBlock}
+
 ## Transcript
 ${transcriptText}
 
 ## Proctoring
 ${proctoringText}
+
+EVALUATION CONTEXT:
+- The transcript shows what was actually discussed.
+- The resume + question bank above shows what the interviewer was supposed to cover.
+- Cross-check: did the candidate's answers match their resume claims? (e.g., resume says "led team of 10" — did the transcript show concrete leadership examples?)
+- If the question bank had specific expected answers (look for "correct" or "expected" markers), score the candidate's answer against those.
+- Penalize discrepancies between resume claims and transcript-demonstrated competence.
 
 Respond with ONLY valid JSON (do NOT include overall or recommendation — system computes those):
 {
