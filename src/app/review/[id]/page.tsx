@@ -383,6 +383,45 @@ export default function ReviewPage() {
               </ul>
             </div>
           </div>
+
+          {/* Coverage — which focus areas were actually tested */}
+          {(scorecard as any).coverage && (
+            <div className="mt-5 pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Focus Area Coverage</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {(scorecard as any).coverage.covered?.length > 0 && (
+                  <div>
+                    <div className="text-green-700 font-medium mb-1.5">✓ Fully covered</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(scorecard as any).coverage.covered.map((a: string, i: number) => (
+                        <span key={i} className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full">{a}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(scorecard as any).coverage.partial?.length > 0 && (
+                  <div>
+                    <div className="text-amber-700 font-medium mb-1.5">~ Partially covered</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(scorecard as any).coverage.partial.map((a: string, i: number) => (
+                        <span key={i} className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full">{a}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(scorecard as any).coverage.notCovered?.length > 0 && (
+                  <div>
+                    <div className="text-red-700 font-medium mb-1.5">✗ Not tested</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(scorecard as any).coverage.notCovered.map((a: string, i: number) => (
+                        <span key={i} className="px-2 py-0.5 bg-red-50 text-red-700 rounded-full">{a}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tabbed sections */}

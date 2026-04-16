@@ -20,5 +20,6 @@ export function normalizeScorecard(raw: any) {
       assessment: e.assessment ?? "",
     })),
     proctoringNotes: raw.proctoringNotes ?? raw.proctoring_notes ?? "No issues detected.",
+    coverage: raw.coverage ?? null,
   };
 }
