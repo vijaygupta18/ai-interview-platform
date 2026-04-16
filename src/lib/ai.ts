@@ -399,6 +399,20 @@ export async function generateScorecard(interview: Interview): Promise<string> {
     ? interview.proctoring.map((e) => `[${e.severity.toUpperCase()}] ${e.type}: ${e.message} at ${e.timestamp}`).join("\n")
     : "No proctoring issues detected.";
 
+  // Pair each interviewer message with the candidate response that immediately followed.
+  // Lets the AI evaluate each Q→A as a discrete unit instead of scanning a flat transcript.
+  const qaPairs: { q: string; a: string; idx: number }[] = [];
+  for (let i = 0; i < interview.transcript.length - 1; i++) {
+    const cur = interview.transcript[i];
+    const next = interview.transcript[i + 1];
+    if (cur.role === "ai" && next.role === "candidate") {
+      qaPairs.push({ q: cur.text, a: next.text, idx: qaPairs.length + 1 });
+    }
+  }
+  const qaPairsText = qaPairs.length > 0
+    ? qaPairs.map(p => `--- Pair ${p.idx} ---\nQ: ${p.q}\nA: ${p.a}`).join("\n\n")
+    : "No clear Q-A pairs found.";
+
   const levelBar = getLevelCalibration(interview.level);
   const candidateName = extractCandidateName(interview.resume || "") || "the candidate";
 
@@ -472,7 +486,19 @@ Before scoring, identify which focus areas (${interview.focusAreas.join(", ")}) 
 ${interview.resume || "No resume provided."}
 ${orgGuidelinesBlock}${bannedBlock}
 
-## Transcript
+## Q→A Pairs (each interviewer question paired with the candidate's response that followed)
+${qaPairsText}
+
+PER-PAIR EVALUATION:
+For each pair above, mentally judge:
+1. What was the question asking? (intent, not literal words — STT may have errors)
+2. Did the candidate answer it? (fully / partially / not at all)
+3. If the question maps to a question bank item with an expected answer, did the candidate's answer match?
+4. Was the reasoning sound, surface-level, or wrong?
+
+Then aggregate per-dimension scores from these per-pair judgments. Cite specific pair numbers in evidence (e.g., "in Pair 4, candidate gave...").
+
+## Full Transcript (for context, in case Q-A pairing missed something)
 ${transcriptText}
 
 ## Proctoring
