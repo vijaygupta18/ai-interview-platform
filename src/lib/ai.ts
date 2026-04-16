@@ -437,25 +437,10 @@ DIMENSIONS:
 
 STT AWARENESS: Transcript has STT errors. "ports"→pods, "ENB"→env, "ready stream"→Redis stream, etc. Score INTENT not literal text.
 
-WEIGHTS: ${roleWeights}
-
-CULTURE FIT — ASYMMETRIC WEIGHTING:
-- If cultureFit > 3 → EXCLUDE it from the overall calculation. Compute overall as the weighted average of ONLY the other 4 dimensions, redistributing cultureFit's weight proportionally across them. (Good culture fit is table stakes, not a score booster.)
-- If cultureFit <= 3 → INCLUDE it normally in the weighted average. (Bad culture fit is a real penalty.)
-This is asymmetric by design.
-
-RECOMMENDATION:
-- strong_hire: overall >= ${settings.scoring.strongHireOverall} AND no dim < ${settings.scoring.strongHireMinDim}
-- hire: overall > ${settings.scoring.hireOverall} AND each dim meets its minimum:
-    technicalDepth >= ${settings.scoring.hireMinDims.technicalDepth},
-    communication >= ${settings.scoring.hireMinDims.communication},
-    problemSolving >= ${settings.scoring.hireMinDims.problemSolving},
-    domainKnowledge >= ${settings.scoring.hireMinDims.domainKnowledge},
-    cultureFit >= ${settings.scoring.hireMinDims.cultureFit}
-- no_hire: doesn't meet hire criteria
-- strong_no_hire: overall < ${settings.scoring.strongNoHireOverall} OR fundamental inability
-Bar: ${settings.company.hiringBar.toUpperCase()}${settings.company.hiringBar === "strict" ? " — lean no_hire when unsure." : settings.company.hiringBar === "lenient" ? " — benefit of doubt when unsure." : "."}
+Bar: ${settings.company.hiringBar.toUpperCase()}${settings.company.hiringBar === "strict" ? " — be strict, harder to give 4-5." : settings.company.hiringBar === "lenient" ? " — give benefit of doubt." : "."}
 ${settings.scorecard.customCriteria.trim() ? `\nORG CRITERIA: ${settings.scorecard.customCriteria.trim()}` : ""}${settings.company.cultureNotes.trim() ? `\nCULTURE: ${settings.company.cultureNotes.trim()}` : ""}
+
+NOTE: You only need to score the 5 dimensions (1-5 each). The system will compute the overall score and final recommendation server-side using ${roleWeights} weights and per-org thresholds. Do NOT speculate about hire/no_hire — focus on accurate dimension scoring.
 
 DIFFERENTIATE scores. A mix of 2/3/4 is correct. All-same-number = fail. 5 is rare.
 
@@ -472,16 +457,14 @@ ${transcriptText}
 ## Proctoring
 ${proctoringText}
 
-Respond with ONLY valid JSON:
+Respond with ONLY valid JSON (do NOT include overall or recommendation — system computes those):
 {
   "technicalDepth": <1-5>,
   "communication": <1-5>,
   "problemSolving": <1-5>,
   "domainKnowledge": <1-5>,
   "cultureFit": <1-5>,
-  "overall": <weighted avg>,
-  "recommendation": "<strong_hire|hire|no_hire|strong_no_hire>",
-  "summary": "<detailed 5-8 sentences: overall impression, specific strengths with examples, specific gaps, how they handled pressure/probes, why this recommendation>",
+  "summary": "<detailed 5-8 sentences: overall impression, specific strengths with examples, specific gaps, how they handled pressure/probes>",
   "strengths": ["<with example>", "<with example>"],
   "weaknesses": ["<with example>", "<with example>"],
   "evidence": [{"dimension": "<dim>", "quote": "<candidate quote>", "assessment": "<why>"}],

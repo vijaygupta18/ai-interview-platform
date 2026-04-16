@@ -4,6 +4,8 @@ import { generateScorecard } from "@/lib/ai";
 import { startScoring, completeScoring, failScoring } from "@/lib/scoring-tracker";
 import { normalizeScorecard } from "@/lib/normalize-scorecard";
 import { parseScorecardJSON } from "@/lib/parse-scorecard";
+import { calculateOverall, calculateRecommendation } from "@/lib/scorecard-calc";
+import { getOrgAISettings } from "@/lib/ai-settings";
 import { validateAccess } from "@/lib/auth-check";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -70,6 +72,19 @@ async function generateScorecardInBackground(id: string, interview: any) {
     console.log(`[Auto-Score] Generating scorecard for interview ${id}...`);
     const scorecardRaw = await generateScorecard(interview);
     const parsed = parseScorecardJSON(scorecardRaw);
+
+    // Server-side compute overall + recommendation for deterministic scoring
+    const dimScores = {
+      technicalDepth: parsed.technicalDepth ?? 3,
+      communication: parsed.communication ?? 3,
+      problemSolving: parsed.problemSolving ?? 3,
+      domainKnowledge: parsed.domainKnowledge ?? 3,
+      cultureFit: parsed.cultureFit ?? 3,
+    };
+    const orgSettings = await getOrgAISettings(interview.orgId);
+    parsed.overall = calculateOverall(dimScores, interview.role);
+    parsed.recommendation = calculateRecommendation(parsed.overall, dimScores, orgSettings);
+
     const scorecard = normalizeScorecard(parsed);
 
     await updateInterview(id, { scorecard });
