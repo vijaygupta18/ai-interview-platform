@@ -439,10 +439,20 @@ STT AWARENESS: Transcript has STT errors. "ports"→pods, "ENB"→env, "ready st
 
 WEIGHTS: ${roleWeights}
 
+CULTURE FIT FLOOR RULE:
+- If cultureFit > 3 → EXCLUDE it from overall weighted average (redistribute its weight proportionally across the other 4 dimensions).
+- If cultureFit <= 3 → include it normally as a penalty.
+Rationale: good culture fit is table stakes, not a score booster. Only flag it when it's a concern.
+
 RECOMMENDATION:
 - strong_hire: overall >= ${settings.scoring.strongHireOverall} AND no dim < ${settings.scoring.strongHireMinDim}
-- hire: overall > ${settings.scoring.hireOverall} AND no dim < ${settings.scoring.hireMinDim}
-- no_hire: overall <= ${settings.scoring.hireOverall} OR any dim < ${settings.scoring.hireMinDim}
+- hire: overall > ${settings.scoring.hireOverall} AND each dim meets its minimum:
+    technicalDepth >= ${settings.scoring.hireMinDims.technicalDepth},
+    communication >= ${settings.scoring.hireMinDims.communication},
+    problemSolving >= ${settings.scoring.hireMinDims.problemSolving},
+    domainKnowledge >= ${settings.scoring.hireMinDims.domainKnowledge},
+    cultureFit >= ${settings.scoring.hireMinDims.cultureFit}
+- no_hire: doesn't meet hire criteria
 - strong_no_hire: overall < ${settings.scoring.strongNoHireOverall} OR fundamental inability
 Bar: ${settings.company.hiringBar.toUpperCase()}${settings.company.hiringBar === "strict" ? " — lean no_hire when unsure." : settings.company.hiringBar === "lenient" ? " — benefit of doubt when unsure." : "."}
 ${settings.scorecard.customCriteria.trim() ? `\nORG CRITERIA: ${settings.scorecard.customCriteria.trim()}` : ""}${settings.company.cultureNotes.trim() ? `\nCULTURE: ${settings.company.cultureNotes.trim()}` : ""}

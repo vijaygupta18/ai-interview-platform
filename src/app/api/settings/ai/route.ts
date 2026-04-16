@@ -40,6 +40,9 @@ export async function PUT(req: Request) {
   if (s.hireOverall < s.strongNoHireOverall) errors.push("hire threshold must be >= strong_no_hire threshold");
   if (s.strongHireOverall > 5 || s.hireOverall > 5) errors.push("thresholds cannot exceed 5");
   if (s.strongNoHireOverall < 1) errors.push("strong_no_hire threshold cannot be below 1");
+  for (const [dim, val] of Object.entries(s.hireMinDims)) {
+    if (typeof val !== "number" || val < 0 || val > 5) errors.push(`hireMinDims.${dim} must be 0-5`);
+  }
 
   // Text length limits
   if (merged.behavior.customGuidelines.length > 2000) errors.push("custom guidelines > 2000 chars");

@@ -7,9 +7,16 @@ export interface AISettings {
   };
   scoring: {
     strongHireOverall: number;   // default 4.2
-    strongHireMinDim: number;    // default 3.5
+    strongHireMinDim: number;    // default 3.5 (applies uniformly for strong_hire)
     hireOverall: number;         // default 3.0
-    hireMinDim: number;          // default 2.5
+    // Per-dimension minimums required to qualify as "hire"
+    hireMinDims: {
+      technicalDepth: number;
+      communication: number;
+      problemSolving: number;
+      domainKnowledge: number;
+      cultureFit: number;
+    };
     strongNoHireOverall: number; // default 2.0
   };
   behavior: {
@@ -36,7 +43,13 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     strongHireOverall: 4.2,
     strongHireMinDim: 3.5,
     hireOverall: 3.0,
-    hireMinDim: 2.5,
+    hireMinDims: {
+      technicalDepth: 3,
+      communication: 2,
+      problemSolving: 3,
+      domainKnowledge: 2,
+      cultureFit: 3,
+    },
     strongNoHireOverall: 2.0,
   },
   behavior: {
@@ -80,7 +93,11 @@ export function mergeSettings(partial: Partial<AISettings> | null | undefined): 
   const p = partial || {};
   return {
     persona: { ...DEFAULT_AI_SETTINGS.persona, ...(p.persona || {}) },
-    scoring: { ...DEFAULT_AI_SETTINGS.scoring, ...(p.scoring || {}) },
+    scoring: {
+      ...DEFAULT_AI_SETTINGS.scoring,
+      ...(p.scoring || {}),
+      hireMinDims: { ...DEFAULT_AI_SETTINGS.scoring.hireMinDims, ...((p.scoring?.hireMinDims) || {}) },
+    },
     behavior: { ...DEFAULT_AI_SETTINGS.behavior, ...(p.behavior || {}) },
     scorecard: { ...DEFAULT_AI_SETTINGS.scorecard, ...(p.scorecard || {}) },
     company: { ...DEFAULT_AI_SETTINGS.company, ...(p.company || {}) },

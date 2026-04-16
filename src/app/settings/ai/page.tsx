@@ -113,9 +113,22 @@ export default function AISettingsPage() {
           <Row label="hire — overall >">
             <input type="number" step="0.1" min="1" max="5" value={settings.scoring.hireOverall} onChange={(e) => update("scoring.hireOverall", parseFloat(e.target.value))} className="input w-24" />
           </Row>
-          <Row label="hire — min dimension ≥">
-            <input type="number" step="0.1" min="1" max="5" value={settings.scoring.hireMinDim} onChange={(e) => update("scoring.hireMinDim", parseFloat(e.target.value))} className="input w-24" />
-          </Row>
+          <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-2">
+            <div className="text-xs text-gray-500 font-medium mb-2">Per-dimension minimums for hire (0-5):</div>
+            {([
+              ["technicalDepth", "Technical Depth"],
+              ["communication", "Communication"],
+              ["problemSolving", "Problem Solving"],
+              ["domainKnowledge", "Domain Knowledge"],
+              ["cultureFit", "Culture Fit"],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="flex items-center gap-3">
+                <label className="text-sm text-gray-700 w-40 shrink-0">{label}</label>
+                <input type="number" step="0.5" min="0" max="5" value={settings.scoring.hireMinDims[key]} onChange={(e) => update(`scoring.hireMinDims.${key}`, parseFloat(e.target.value))} className="input w-20" />
+                <span className="text-xs text-gray-400">min required for hire</span>
+              </div>
+            ))}
+          </div>
           <Row label="strong_no_hire — overall <">
             <input type="number" step="0.1" min="1" max="5" value={settings.scoring.strongNoHireOverall} onChange={(e) => update("scoring.strongNoHireOverall", parseFloat(e.target.value))} className="input w-24" />
           </Row>
