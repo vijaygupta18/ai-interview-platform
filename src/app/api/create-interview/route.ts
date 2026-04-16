@@ -100,9 +100,13 @@ export async function POST(req: Request) {
       }
     }
 
-    // Append question bank questions to resume context
+    // Append question bank questions to resume context.
+    // Use separators for multi-line questions so formatting (tables, lists, puzzles) is preserved.
     if (questionBankQuestions.length > 0) {
-      resumeText += `\n\n--- QUESTION BANK ---\nUse these questions during the interview:\n${questionBankQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
+      const formatted = questionBankQuestions
+        .map((q, i) => `--- Question ${i + 1} ---\n${q.trim()}`)
+        .join("\n\n");
+      resumeText += `\n\n=== QUESTION BANK ===\nUse these questions during the interview. Preserve their exact formatting (lists, tables, line breaks) when presenting to the candidate:\n\n${formatted}\n=== END QUESTION BANK ===`;
     }
 
     // Append additional context (test scores, hiring manager notes, etc.)

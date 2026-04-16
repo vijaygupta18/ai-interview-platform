@@ -223,10 +223,10 @@ OUTPUT RULES (strict):
 - NEVER repeat yourself. Check the conversation history — if you already greeted or asked something, move forward, don't repeat it.
 
 QUESTION PRIORITY (follow this order):
-1. FIRST: If a question bank was provided, ask those questions first — they are the interviewer's priority questions
+1. FIRST: If a question bank was provided, ask those questions EXACTLY AS WRITTEN. Do NOT improvise, rephrase, or skip. If the bank has multiple stages/questions, complete them in order. Do not invent your own questions until the bank is fully exhausted.
 2. SECOND: Ask questions based on the candidate's resume — probe their specific past experience
 3. THIRD: Ask general questions for the role and focus areas
-Always mix in follow-up questions between main questions to dig deeper.
+Use minimal follow-ups (at most 1 per question) — don't grill the candidate with repeated probes.
 
 INTERVIEW STRATEGY:
 - Opening: greet warmly, introduce yourself as Anita, ask candidate to briefly introduce themselves
@@ -242,8 +242,9 @@ ADAPTIVE DEPTH (this is critical — behave like a real interviewer):
 - USE YOUR INTELLIGENCE: You have deep technical/domain knowledge. If the candidate says something factually wrong, don't just accept it — challenge it. But do it respectfully, like a senior colleague would.
 - NEVER REVEAL SCORES OR EVALUATIONS: Do NOT tell the candidate their score, rating, or how well they did. No "I'd give you an 8 out of 10" or "Good answer" or "Your answer was X/10". Never mention any number-based scoring. Just move to the next question.
 - NEVER CONFIRM OR DENY ANSWERS: Do NOT say "That's correct", "Good approach", "That's right", or "That's wrong". Do NOT say "I appreciate your answer" or "Nice explanation". Just ask the next question or probe deeper. The candidate should not know if they answered correctly.
-- DON'T GIVE ANSWERS OR HINTS: NEVER provide the correct answer. NEVER explain how something works. NEVER say "Actually, the correct approach is..." or "Think about X" or "Consider Y" or "The way it works is...". If they're wrong, probe: "Walk me through why you chose that approach" — let them discover the issue themselves. Your job is to ASSESS, not TEACH.
-- PROBE VAGUE ANSWERS: If an answer is surface-level, dig in: "Can you walk me through a specific example?" or "What was the actual outcome?"
+- ABSOLUTELY NO HINTS OR ANSWERS: This is the #1 rule. NEVER provide the correct answer. NEVER explain how something works. NEVER say "Actually, the correct approach is...", "Think about X", "Consider Y", "The way it works is...", "One approach is...", "You could also consider...", "It might help to think about...". Never drop keywords that reveal the answer. Never give partial answers. Never summarize concepts. Your job is to ASSESS, not TEACH. If they're wrong, SHUT UP and probe: "Walk me through why you chose that." If they stay wrong, say "Let's move on" and switch topics. DO NOT help them.
+- ASK ONE QUESTION AT A TIME: Ask a SINGLE clean question, then wait. Do NOT ask 2-3 questions in one response. Do NOT bullet-list multiple sub-questions. ONE question per turn.
+- MINIMAL PROBING: Ask at most 1 follow-up per main question. If the candidate's answer is vague, ask ONE clarifying question like "Can you give a specific example?" — if still vague, move on. Don't grill them across 4-5 probes.
 - MOVE ON WHEN NEEDED: If the candidate gives 2 weak answers on the same topic, say "Let's move on" and switch topics. Don't waste time.
 - STUCK CANDIDATES: Rephrase the question once. If still stuck, move on. No hints.
 - PROGRESSIVE DIFFICULTY: Easy → Medium → Hard within each focus area. Stop escalating when you find the candidate's ceiling
@@ -259,7 +260,7 @@ FOLLOW-UP TECHNIQUES (use these naturally):
 TIME MANAGEMENT:
 - This is a ${interview.duration} minute interview. You have limited time — use it wisely.
 - You have ${interview.focusAreas.length} focus areas with ~${minPerArea} min each. Don't spend too long on one area.
-- Aim for 2-3 questions per focus area (including follow-ups). Move on when you have enough signal.
+- Aim for 1-2 questions per focus area (including at most 1 follow-up each). Move on quickly when you have enough signal.
 - If a candidate gives a strong, detailed answer, acknowledge it and move to the next topic.
 - When time is running low, signal it naturally: "We're running short on time, let me ask one more thing..."
 - With 2-3 minutes left, wrap up professionally. Do NOT ask "do you have questions for me" — you are an AI and cannot answer questions about the company, team, or role. Instead say something like: "That's all the time we have. Thank you for your time, ${candidateName ? candidateName.split(" ")[0] : ""} it was great speaking with you. The team will review your responses and get back to you soon."
@@ -280,27 +281,40 @@ function buildResumeContext(interview: Interview): string {
   return `Here is the candidate's resume. After asking question bank questions, use this resume to ask specific, targeted follow-ups about their past work:\n\n${resume}`;
 }
 
-async function callJuspayAI(
+type AIConfig = { baseUrl: string; apiKey: string; model: string; timeoutMs: number };
+
+const getChatConfig = (): AIConfig => ({
+  baseUrl: process.env.AI_BASE_URL || "",
+  apiKey: process.env.AI_API_KEY || "",
+  model: process.env.AI_MODEL || "kimi-latest",
+  timeoutMs: 12000,
+});
+
+const getSummaryConfig = (): AIConfig => ({
+  baseUrl: process.env.SUMMARY_AI_BASE_URL || process.env.AI_BASE_URL || "",
+  apiKey: process.env.SUMMARY_AI_API_KEY || process.env.AI_API_KEY || "",
+  model: process.env.SUMMARY_AI_MODEL || process.env.AI_MODEL || "kimi-latest",
+  timeoutMs: 60000,
+});
+
+async function callAI(
+  config: AIConfig,
   messages: { role: string; content: string }[],
-  maxTokens = 300,
-  temperature = 0.7
+  maxTokens: number,
+  temperature: number
 ): Promise<string> {
   const controller = new AbortController();
-  const timeoutMs = maxTokens > 1000 ? 60000 : 12000; // 60s for scorecard, 12s for interview
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
-  const res = await fetch(`${process.env.AI_BASE_URL}/v1/chat/completions`, {
+  const res = await fetch(`${config.baseUrl}/v1/chat/completions`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.AI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.AI_MODEL || "kimi-latest",
+      model: config.model,
       messages,
       max_tokens: maxTokens,
       temperature,
-      ...((process.env.AI_MODEL || "").includes("minimax") ? { thinking: { type: "disabled" } } : {}),
+      ...(config.model.includes("minimax") ? { thinking: { type: "disabled" } } : {}),
     }),
     signal: controller.signal,
   });
@@ -312,11 +326,36 @@ async function callJuspayAI(
   }
 
   const data = await res.json();
-  // IMPORTANT: only read `content`, NOT `reasoning_content`.
-  // M2.5 returns both fields — content is the real response, reasoning_content
-  // is the model's internal thinking. We must not speak the thinking.
   const content = data.choices?.[0]?.message?.content || "";
   return stripThinking(content);
+}
+
+/** Interview conversation turn — fast, short, uses chat model. */
+async function callChatAI(
+  messages: { role: string; content: string }[],
+  maxTokens = 500,
+  temperature = 0.3
+): Promise<string> {
+  return callAI(getChatConfig(), messages, maxTokens, temperature);
+}
+
+/** Scorecard / summary generation — long-form, uses summary model. */
+async function callSummaryAI(
+  messages: { role: string; content: string }[],
+  maxTokens = 4000,
+  temperature = 0.3
+): Promise<string> {
+  return callAI(getSummaryConfig(), messages, maxTokens, temperature);
+}
+
+// Back-compat alias — existing callers will be updated to use callChatAI / callSummaryAI.
+async function callJuspayAI(
+  messages: { role: string; content: string }[],
+  maxTokens = 300,
+  temperature = 0.7
+): Promise<string> {
+  const config = maxTokens > 1000 ? getSummaryConfig() : getChatConfig();
+  return callAI(config, messages, maxTokens, temperature);
 }
 
 export function buildInterviewPrompt(
@@ -367,7 +406,7 @@ export async function getAIResponse(
   interview: Interview,
   transcript: TranscriptEntry[]
 ): Promise<string> {
-  return callJuspayAI(buildInterviewPrompt(interview, transcript), 500, 0.3);
+  return callChatAI(buildInterviewPrompt(interview, transcript), 500, 0.3);
 }
 
 export async function generateScorecard(interview: Interview): Promise<string> {
@@ -469,11 +508,23 @@ ${(() => {
   return "- technicalDepth: 25%, communication: 20%, problemSolving: 20%, domainKnowledge: 20%, cultureFit: 15%\n- Balanced weights for this role";
 })()}
 
-RECOMMENDATION GUIDE (using weighted overall):
-- strong_hire: weighted overall >= 4 AND no dimension below 3. Exceptional candidate for ${interview.level}.
-- hire: weighted overall >= 3. Meets the bar. Low scores in non-critical dimensions are OK if role-critical dimensions are strong.
-- no_hire: weighted overall < 2.5 OR role-critical dimension below 2.
-- strong_no_hire: weighted overall < 2 OR fundamental inability to answer basic questions OR clear dishonesty.
+RECOMMENDATION GUIDE (STRICT — do not inflate):
+- strong_hire: weighted overall >= 4.2 AND no dimension below 3.5 AND at least 2 dimensions >= 4.5. Truly exceptional.
+- hire: weighted overall >= 3.5 AND no dimension below 3. The candidate clearly demonstrated competence across all dimensions.
+- no_hire: weighted overall < 3.5 OR ANY dimension below 3. "Adequate" is NOT a hire — only clear competence counts.
+- strong_no_hire: weighted overall < 2.5 OR fundamental inability OR clear dishonesty OR refused to engage.
+
+CRITICAL — INCOMPLETE INTERVIEWS (cannot be "hire"):
+If the candidate had <8 total exchanges OR did not complete all intended stages/questions, they CANNOT receive "hire" or "strong_hire". Maximum recommendation for incomplete interviews is "no_hire" — you cannot verify competence from insufficient data.
+Signs of incomplete interview:
+- Candidate message count is low (<8 meaningful messages)
+- Question bank had multiple stages but only first 1-2 were attempted
+- Interview ended abruptly without proper closing
+- Candidate gave surface-level answers without being probed deeply
+In these cases, score each dimension based on LIMITED EVIDENCE — most scores should be 1-3 range. Do not extrapolate competence from a single good answer.
+
+SCORE INFLATION IS FAILURE:
+If you find yourself scoring most dimensions at 4, re-examine the transcript. A score of 4 means "strong, meets bar comfortably with real experience". A score of 3 means "adequate, surface-level". If evidence is thin, score 2-3, not 3-4.
 
 EVIDENCE: For each dimension, cite a candidate quote and explain the score. Note STT errors and interpret intended meaning. Include at least 3-4 evidence items. If the candidate improved over time, note that.
 
@@ -503,5 +554,5 @@ Respond with ONLY valid JSON, no markdown, no code blocks, no explanation outsid
   "proctoringNotes": "<summary of integrity concerns or 'No issues detected'>"
 }`;
 
-  return callJuspayAI([{ role: "system", content: scorecardPrompt }], 4000, 0.3);
+  return callSummaryAI([{ role: "system", content: scorecardPrompt }], 4000, 0.3);
 }

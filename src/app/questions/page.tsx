@@ -73,10 +73,13 @@ export default function QuestionsPage() {
   };
 
   const addQuestion = () => {
-    if (newQuestion.trim()) {
-      setQuestions((prev) => [...prev, newQuestion.trim()]);
-      setNewQuestion("");
-    }
+    const text = newQuestion.trim();
+    if (!text) return;
+    // Split pasted content on 2+ consecutive newlines — each block becomes a separate question.
+    // This preserves formatting within a question (single newlines) but splits between questions.
+    const blocks = text.split(/\n\s*\n+/).map((b) => b.trim()).filter(Boolean);
+    setQuestions((prev) => [...prev, ...blocks]);
+    setNewQuestion("");
   };
 
   const removeQuestion = (idx: number) => {
@@ -314,10 +317,23 @@ export default function QuestionsPage() {
                   <textarea
                     value={newQuestion}
                     onChange={(e) => setNewQuestion(e.target.value)}
+                    onPaste={(e) => {
+                      // Some browsers paste rich-text HTML which collapses newlines.
+                      // Force plain text extraction to preserve \n.
+                      const plain = e.clipboardData.getData("text/plain");
+                      if (plain) {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const start = target.selectionStart || 0;
+                        const end = target.selectionEnd || 0;
+                        const newValue = newQuestion.substring(0, start) + plain + newQuestion.substring(end);
+                        setNewQuestion(newValue);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addQuestion(); }
                     }}
-                    placeholder={"Type a question and press Add (Shift+Enter for new line)\n\nSupports formatting:\n- Lists with dashes\n| Tables | with | pipes |\nGroups on separate lines"}
+                    placeholder={"Type a question and press Add (Shift+Enter for new line)\n\nPaste multiple questions separated by a BLANK LINE — each block becomes a separate question.\n\nFormatting preserved within a question:\n- Lists with dashes\n| Tables | with | pipes |\nGroups on separate lines"}
                     rows={3}
                     className="input-field flex-1 resize-none"
                   />
