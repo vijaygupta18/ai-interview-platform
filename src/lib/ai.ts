@@ -508,11 +508,11 @@ ${(() => {
   return "- technicalDepth: 25%, communication: 20%, problemSolving: 20%, domainKnowledge: 20%, cultureFit: 15%\n- Balanced weights for this role";
 })()}
 
-RECOMMENDATION GUIDE (STRICT — do not inflate):
-- strong_hire: weighted overall >= 4.2 AND no dimension below 3.5 AND at least 2 dimensions >= 4.5. Truly exceptional.
-- hire: weighted overall >= 3.5 AND no dimension below 3. The candidate clearly demonstrated competence across all dimensions.
-- no_hire: weighted overall < 3.5 OR ANY dimension below 3. "Adequate" is NOT a hire — only clear competence counts.
-- strong_no_hire: weighted overall < 2.5 OR fundamental inability OR clear dishonesty OR refused to engage.
+RECOMMENDATION GUIDE:
+- strong_hire: weighted overall >= 4.2 AND no dimension below 3.5. Truly exceptional.
+- hire: weighted overall > 3 AND no dimension below 2.5. Candidate meets the bar.
+- no_hire: weighted overall <= 3 OR ANY dimension below 2.5.
+- strong_no_hire: weighted overall < 2 OR fundamental inability OR clear dishonesty OR refused to engage.
 
 CRITICAL — INCOMPLETE INTERVIEWS (cannot be "hire"):
 If the candidate had <8 total exchanges OR did not complete all intended stages/questions, they CANNOT receive "hire" or "strong_hire". Maximum recommendation for incomplete interviews is "no_hire" — you cannot verify competence from insufficient data.
