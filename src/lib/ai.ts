@@ -320,7 +320,7 @@ async function callChatAI(
 /** Scorecard / summary generation — long-form, uses summary model. */
 async function callSummaryAI(
   messages: { role: string; content: string }[],
-  maxTokens = 4000,
+  maxTokens = 5500,
   temperature = 0.3
 ): Promise<string> {
   return callAI(getSummaryConfig(), messages, maxTokens, temperature);
@@ -500,5 +500,5 @@ Respond with ONLY valid JSON (do NOT include overall or recommendation — syste
   "proctoringNotes": "<summary or 'No issues detected'>"
 }`;
 
-  return callSummaryAI([{ role: "system", content: scorecardPrompt }], 4000, 0.3);
+  return callSummaryAI([{ role: "system", content: scorecardPrompt }], 5500, 0.3);
 }
