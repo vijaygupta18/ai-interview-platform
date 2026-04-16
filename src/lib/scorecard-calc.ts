@@ -31,33 +31,15 @@ export function getRoleWeights(role: string): DimScores {
 }
 
 /**
- * Compute overall score from per-dim scores.
- * Asymmetric culture-fit rule: if cultureFit > 3, exclude it and redistribute its weight across the other 4 dims.
- * Otherwise include normally.
+ * Compute overall as a simple average.
+ * - cultureFit >= 3 → (tech + comm + prob + domain) / 4   (excluded)
+ * - cultureFit <  3 → (tech + comm + prob + domain + culture) / 5   (included as penalty)
  */
-export function calculateOverall(scores: DimScores, role: string): number {
-  const w = getRoleWeights(role);
-
-  // Asymmetric: if cultureFit is acceptable (>= 3), exclude it from average.
-  // Only count cultureFit when it's a problem (< 3, i.e. 1 or 2).
-  if (scores.cultureFit >= 3) {
-    const remaining = 1 - w.cultureFit;
-    if (remaining <= 0) return scores.cultureFit; // edge case
-    const scale = 1 / remaining;
-    const overall =
-      scores.technicalDepth * (w.technicalDepth * scale) +
-      scores.communication * (w.communication * scale) +
-      scores.problemSolving * (w.problemSolving * scale) +
-      scores.domainKnowledge * (w.domainKnowledge * scale);
-    return Math.round(overall * 100) / 100;
-  }
-
-  const overall =
-    scores.technicalDepth * w.technicalDepth +
-    scores.communication * w.communication +
-    scores.problemSolving * w.problemSolving +
-    scores.domainKnowledge * w.domainKnowledge +
-    scores.cultureFit * w.cultureFit;
+export function calculateOverall(scores: DimScores, _role: string): number {
+  const otherSum = scores.technicalDepth + scores.communication + scores.problemSolving + scores.domainKnowledge;
+  const overall = scores.cultureFit >= 3
+    ? otherSum / 4
+    : (otherSum + scores.cultureFit) / 5;
   return Math.round(overall * 100) / 100;
 }
 
@@ -78,10 +60,10 @@ export function calculateRecommendation(
     return "strong_hire";
   }
 
-  // hire: overall > threshold AND each dim meets its specific minimum
+  // hire: overall >= threshold AND each dim meets its specific minimum
   const m = t.hireMinDims;
   if (
-    overall > t.hireOverall &&
+    overall >= t.hireOverall &&
     scores.technicalDepth >= m.technicalDepth &&
     scores.communication >= m.communication &&
     scores.problemSolving >= m.problemSolving &&
