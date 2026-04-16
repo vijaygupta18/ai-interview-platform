@@ -1,11 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { ConfirmModal } from "@/components/ConfirmModal";
 
 type AISettings = any;
 
 export default function AISettingsPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const isAdmin = (session?.user as any)?.role === "admin";
+
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [defaults, setDefaults] = useState<AISettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -14,13 +20,27 @@ export default function AISettingsPage() {
   const [showResetModal, setShowResetModal] = useState(false);
 
   useEffect(() => {
+    if (status === "loading") return;
+    if (!session) { router.push("/login"); return; }
+    if (!isAdmin) return; // don't fetch if not admin
     fetch("/api/settings/ai").then((r) => r.json()).then((d) => {
       if (d.error) return setMessage({ type: "error", text: d.error });
       setSettings(d.settings);
       setDefaults(d.defaults);
     });
-  }, []);
+  }, [status, session, isAdmin, router]);
 
+  if (status === "loading") return <div className="flex min-h-screen"><Sidebar /><div className="flex-1 p-8">Loading...</div></div>;
+  if (!isAdmin) return (
+    <div className="flex min-h-screen bg-gray-50"><Sidebar />
+      <div className="flex-1 p-8 max-w-4xl mx-auto">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 text-center">
+          <h1 className="text-xl font-semibold text-amber-900 mb-2">Admin access required</h1>
+          <p className="text-sm text-amber-700">AI settings can only be modified by organization administrators.</p>
+        </div>
+      </div>
+    </div>
+  );
   if (!settings) return <div className="flex min-h-screen"><Sidebar /><div className="flex-1 p-8">Loading...</div></div>;
 
   const update = (path: string, value: any) => {

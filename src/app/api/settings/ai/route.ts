@@ -13,6 +13,8 @@ import {
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = (session.user as any).role;
+  if (role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   const orgId = (session.user as any).orgId;
   if (!orgId) return NextResponse.json({ error: "No org" }, { status: 400 });
 
@@ -23,6 +25,8 @@ export async function GET() {
 export async function PUT(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = (session.user as any).role;
+  if (role !== "admin") return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   const orgId = (session.user as any).orgId;
   if (!orgId) return NextResponse.json({ error: "No org" }, { status: 400 });
 

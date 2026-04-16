@@ -80,6 +80,7 @@ export function Sidebar() {
   const navRef = useRef<HTMLElement>(null);
 
   const userInitial = session?.user?.name?.charAt(0)?.toUpperCase() || "U";
+  const isAdmin = (session?.user as any)?.role === "admin";
 
   const isActive = (href: string, label: string) => {
     if (label === "Dashboard") return pathname === "/" || pathname.startsWith("/dashboard");
@@ -114,7 +115,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav ref={navRef} className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
+        {navItems.filter((item) => item.href !== "/settings/ai" || isAdmin).map((item) => (
           <Link
             key={item.label}
             href={item.href}

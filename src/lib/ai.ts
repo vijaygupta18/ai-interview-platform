@@ -439,10 +439,10 @@ STT AWARENESS: Transcript has STT errors. "ports"→pods, "ENB"→env, "ready st
 
 WEIGHTS: ${roleWeights}
 
-CULTURE FIT FLOOR RULE:
-- If cultureFit > 3 → EXCLUDE it from overall weighted average (redistribute its weight proportionally across the other 4 dimensions).
-- If cultureFit <= 3 → include it normally as a penalty.
-Rationale: good culture fit is table stakes, not a score booster. Only flag it when it's a concern.
+CULTURE FIT — ASYMMETRIC WEIGHTING:
+- If cultureFit > 3 → EXCLUDE it from the overall calculation. Compute overall as the weighted average of ONLY the other 4 dimensions, redistributing cultureFit's weight proportionally across them. (Good culture fit is table stakes, not a score booster.)
+- If cultureFit <= 3 → INCLUDE it normally in the weighted average. (Bad culture fit is a real penalty.)
+This is asymmetric by design.
 
 RECOMMENDATION:
 - strong_hire: overall >= ${settings.scoring.strongHireOverall} AND no dim < ${settings.scoring.strongHireMinDim}

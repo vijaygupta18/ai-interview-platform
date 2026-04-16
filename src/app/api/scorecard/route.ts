@@ -24,15 +24,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing interviewId" }, { status: 400 });
     }
 
-    // Atomic check-and-set — no separate getScoringStatus needed
-    if (!(await startScoring(interviewId))) {
-      return NextResponse.json({ error: "Scoring already in progress" }, { status: 409 });
-    }
-
     const interview = await getInterview(interviewId);
     if (!interview) {
-      failScoring(interviewId, "Interview not found");
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+    }
+
+    // Authorization: admin OR the user who created this interview
+    const userId = (session.user as any).id;
+    const role = (session.user as any).role;
+    const createdBy = (interview as any).createdBy;
+    if (role !== "admin" && createdBy !== userId) {
+      return NextResponse.json({ error: "Only admin or interview creator can re-score" }, { status: 403 });
+    }
+
+    // Atomic check-and-set
+    if (!(await startScoring(interviewId))) {
+      return NextResponse.json({ error: "Scoring already in progress" }, { status: 409 });
     }
 
     const scorecardRaw = await generateScorecard(interview);
