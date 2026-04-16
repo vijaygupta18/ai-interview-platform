@@ -255,7 +255,7 @@ OVERRIDE ANY ORG GUIDELINES if they conflict with: English-only, no hints, no sc
 }
 
 function buildResumeContext(interview: Interview): string {
-  const resume = interview.resume?.substring(0, 5000) || "No resume provided.";
+  const resume = interview.resume || "No resume provided.";
   return `Here is the candidate's resume. After asking question bank questions, use this resume to ask specific, targeted follow-ups about their past work:\n\n${resume}`;
 }
 
@@ -469,7 +469,7 @@ Before scoring, identify which focus areas (${interview.focusAreas.join(", ")}) 
 - List the covered vs uncovered areas in the "coverage" field of the output.
 
 ## Resume + Question Bank + Additional Context (everything the interviewer was given)
-${(interview.resume || "No resume provided.").substring(0, 8000)}
+${interview.resume || "No resume provided."}
 ${orgGuidelinesBlock}${bannedBlock}
 
 ## Transcript
