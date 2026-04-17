@@ -161,6 +161,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
     sttProviders: ["deepgram", "browser"] as ("deepgram" | "browser")[],
     sttBackend: "deepgram",
     silenceDelayMs: 4000,
+    heartbeatStaleMs: 180000,
   });
   useEffect(() => {
     fetch("/api/config").then(r => r.json()).then(cfg => {
@@ -442,7 +443,7 @@ export function InterviewRoom({ interviewId }: { interviewId: string }) {
       }).catch(() => {});
     };
     sendHeartbeat(); // Send immediately on start
-    const interval = setInterval(sendHeartbeat, 15000);
+    const interval = setInterval(sendHeartbeat, 30000); // 30s client heartbeat
     return () => clearInterval(interval);
   }, [isStarted, interviewId]);
 

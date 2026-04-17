@@ -48,7 +48,8 @@ export async function POST(req: Request) {
     const hbRows = hbResult.rows;
     if (hbRows.length > 0 && hbRows[0].last_heartbeat_at) {
       const elapsed = Date.now() - new Date(hbRows[0].last_heartbeat_at).getTime();
-      if (elapsed > 45000) {
+      const staleMs = parseInt(process.env.HEARTBEAT_STALE_MS || "180000");
+      if (elapsed > staleMs) {
         addProctoringEvent(interviewId, {
           type: "heartbeat_missing",
           severity: "flag",

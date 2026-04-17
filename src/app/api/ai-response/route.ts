@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Interview terminated due to proctoring violations" }, { status: 403 });
     }
 
-    // Check proctoring heartbeat — flag if no heartbeat for >45s
+    // Check proctoring heartbeat — flag if no heartbeat beyond HEARTBEAT_STALE_MS
     const { rows: hbRows } = await pool.query(
       "SELECT last_heartbeat_at FROM interviews WHERE id = $1",
       [interviewId]
@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     if (hbRows.length > 0 && hbRows[0].last_heartbeat_at) {
       const lastHb = new Date(hbRows[0].last_heartbeat_at).getTime();
       const elapsed = Date.now() - lastHb;
-      if (elapsed > 45000) {
+      const staleMs = parseInt(process.env.HEARTBEAT_STALE_MS || "180000");
+      if (elapsed > staleMs) {
         // Heartbeat missing — proctoring may be disabled, log it
         const { addProctoringEvent } = await import("@/lib/store");
         await addProctoringEvent(interviewId, {
