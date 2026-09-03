@@ -24,6 +24,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/vijaygupta18/ai-interview-platform/actions/workflows/ci.yml"><img src="https://github.com/vijaygupta18/ai-interview-platform/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/Status-Production%20Ready-blue?style=flat-square" />
@@ -65,7 +66,7 @@
 - Phone/device detection (bright object analysis)
 - Mandatory screen sharing + fullscreen enforcement
 - Periodic photo capture (every 60s)
-- Configurable strike system (default 10, server-side count)
+- Configurable strike system (default 25, server-side count)
 - Copy/paste blocking
 
 </td>
@@ -120,7 +121,7 @@ npm install
 
 # Setup database
 psql -U postgres -c "CREATE DATABASE ai_interview_platform;"
-psql -U postgres -d ai_interview_platform -f migrations/001_schema.sql
+for f in migrations/*.sql; do psql -U postgres -d ai_interview_platform -f "$f"; done
 
 # Configure (edit with your API keys)
 cp .env.example .env.local
@@ -129,7 +130,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000 and login with `admin@interview.ai` / `admin123`
+Open http://localhost:3000/register to create the first account (the schema seeds a default organization but no users).
 
 ### Docker
 
@@ -152,6 +153,7 @@ docker run -p 3000:3000 --env-file .env.local interview-ai
 | `TTS_PROVIDER` | No | `deepgram` (default) or `edge` (free) |
 | `EDGE_TTS_VOICE` | No | Voice ID (default: `en-IN-NeerjaNeural`) |
 | `EDGE_TTS_RATE` | No | Speed (default: `+10%`) |
+| `MAX_PROCTORING_STRIKES` | No | Proctoring strikes before auto-termination (default: `25`; `NEXT_PUBLIC_MAX_PROCTORING_STRIKES` also honoured) |
 | `SMTP_HOST` | No | Email SMTP host |
 | `SMTP_PORT` | No | Email SMTP port |
 | `SMTP_USER` | No | Email username |
@@ -180,6 +182,9 @@ Works with **any OpenAI-compatible API**:
 | `/new` | Interviewer | Create interview — resume, questions, context |
 | `/questions` | Interviewer | Question bank management |
 | `/compare` | Interviewer | Side-by-side candidate comparison |
+| `/team` | Interviewer | Manage organization members |
+| `/templates` | Interviewer | Email template management |
+| `/settings/ai` | Interviewer | Per-organization AI provider settings |
 | `/dashboard/[id]` | Interviewer | Detail — transcript, scores, photos, proctoring |
 | `/review/[id]` | Interviewer | Scorecard with score rings |
 | `/login` | Public | Sign in |
@@ -245,7 +250,7 @@ Works with **any OpenAI-compatible API**:
 
 ## Database
 
-8 tables — full schema in [`migrations/001_schema.sql`](migrations/001_schema.sql):
+9 tables — full schema in [`migrations/001_schema.sql`](migrations/001_schema.sql), plus incremental changes in the numbered files that follow it (apply every file in [`migrations/`](migrations/) in order):
 
 ```
 organizations ─────── users
@@ -258,7 +263,8 @@ organizations ─────── users
               │          ├── proctoring_events (+ photos)
               │          └── interview_rounds
               │
-              └── question_banks
+              ├── question_banks
+              └── email_templates
 
 webhooks (org-scoped event notifications)
 ```
