@@ -32,7 +32,7 @@
 
 ---
 
-## How It Works — Animated
+## How It Works 
 
 <p align="center">
   <img src="docs/flow.svg" alt="InterviewAI Flow" width="100%" />
